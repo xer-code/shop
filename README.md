@@ -72,7 +72,7 @@ ShopX Global Marketplace is a full-featured, enterprise-grade e-commerce & procu
    DB_NAME=shopx_global
    DB_USER=root
    DB_PASS=
-   APP_NAME="DexterX Global Marketplace"
+   APP_NAME="ShopX Global Marketplace"
    APP_URL="http://shop.test"
    APP_ENV=development
    ```
