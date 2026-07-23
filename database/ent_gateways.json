@@ -1,0 +1,56 @@
+[
+    {
+        "id": 1,
+        "name": "Bitcoin (BTC)",
+        "min": 10,
+        "fee": 0,
+        "address": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+        "status": "Active",
+        "icon": "\u20bf"
+    },
+    {
+        "id": 2,
+        "name": "CashApp",
+        "min": 5,
+        "fee": 1.5,
+        "address": "$shopxglobal",
+        "status": "Active",
+        "icon": "\ud83d\udcb5"
+    },
+    {
+        "id": 3,
+        "name": "Ethereum (ETH)",
+        "min": 10,
+        "fee": 0,
+        "address": "0x71C7656EC7ab88b098defB751B7401B5f6d1476B",
+        "status": "Active",
+        "icon": "\u039e"
+    },
+    {
+        "id": 4,
+        "name": "PayPal",
+        "min": 5,
+        "fee": 2.9,
+        "address": "paypal@shopx.com",
+        "status": "Active",
+        "icon": "\ud83d\udcb3"
+    },
+    {
+        "id": 5,
+        "name": "Zelle",
+        "min": 10,
+        "fee": 0,
+        "address": "zelle@shopx.com",
+        "status": "Active",
+        "icon": "\u26a1"
+    },
+    {
+        "id": 6,
+        "name": "Bank Transfer (ACH)",
+        "min": 25,
+        "fee": 5,
+        "address": "Bank: Barclays, Account: 987654321",
+        "status": "Active",
+        "icon": "\ud83c\udfe6"
+    }
+]

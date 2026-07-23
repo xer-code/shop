@@ -1,0 +1,32 @@
+[
+    {
+        "id": 1,
+        "subject": "helo",
+        "priority": "High",
+        "status": "Closed",
+        "messages": [
+            {
+                "from": "customer",
+                "text": "Hello",
+                "time": "2026-07-20 22:05:03",
+                "sender": "customer"
+            },
+            {
+                "sender": "admin",
+                "text": "hi",
+                "time": "2026-07-20 22:05:21",
+                "from": "admin"
+            },
+            {
+                "from": "customer",
+                "text": "Thanks",
+                "time": "2026-07-20 22:05:40",
+                "sender": "customer"
+            }
+        ],
+        "created_at": "2026-07-20 22:05:03",
+        "user_id": 3,
+        "customer": "Jane Shopper",
+        "date": "2026-07-20 22:05:03"
+    }
+]

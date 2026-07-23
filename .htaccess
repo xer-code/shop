@@ -1,0 +1,14 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Block sensitive directories and files from direct web access
+    RewriteRule ^(\.env|app|config|database) - [F,L]
+
+    # If the request is for a real file or directory in root, serve it directly
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Rewrite all other requests to the public directory
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>

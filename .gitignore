@@ -1,0 +1,20 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Dependency directories
+/vendor/
+/node_modules/
+
+# Logs and storage
+*.log
+/writable/
+/storage/logs/
+/storage/framework/
+
+# IDE / OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

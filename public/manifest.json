@@ -1,0 +1,53 @@
+{
+  "id": "/en/",
+  "name": "DexterX Global Marketplace",
+  "short_name": "DexterX",
+  "description": "Premium Global Procurement, Freight Forwarding, and Import Management Platform",
+  "start_url": "/en/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#0a0a0a",
+  "theme_color": "#D4A017",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/assets/images/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/images/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/assets/images/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/images/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["shopping", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Shop Now",
+      "url": "/en/shop",
+      "icons": [{"src": "/assets/images/icon-192.png", "sizes": "192x192"}]
+    },
+    {
+      "name": "Track Order",
+      "url": "/en/track-order",
+      "icons": [{"src": "/assets/images/icon-192.png", "sizes": "192x192"}]
+    }
+  ]
+}

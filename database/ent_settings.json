@@ -1,0 +1,9 @@
+{
+    "app_name": "ShopX Global",
+    "currency": "USD",
+    "support_email": "support@shopx.com",
+    "maintenance_mode": 0,
+    "tax_rate": 8.5,
+    "tracking_prefix": "SX",
+    "favicon_path": "uploads/settings/favicon_1784746019.png"
+}
