@@ -1,5 +1,5 @@
 <!-- Admin Dashboard stats -->
-<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 2rem;">
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
     <!-- Revenue -->
     <div class="admin-stat-card">
         <div class="stat-label">💰 Total Revenue</div>
@@ -31,7 +31,7 @@
     </div>
 </div>
 
-<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
     <!-- Recent Orders -->
     <div class="card">
         <h2 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 1.25rem;">📦 Recent Orders</h2>

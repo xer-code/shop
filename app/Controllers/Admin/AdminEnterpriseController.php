@@ -468,13 +468,53 @@ class AdminEnterpriseController extends Controller
         $receiverAddress = trim($this->input('receiver_address', ''));
         $receiverContact = trim($this->input('receiver_contact', ''));
         
-        $productType = trim($this->input('product_type', ''));
-        $productWeight = trim($this->input('product_weight', ''));
-        $amount = (float) $this->input('amount', 0.00);
+        $productTypes = $this->input('product_type', []);
+        $productWeights = $this->input('product_weight', []);
+        $amounts = $this->input('amount', []);
         
         $carrier = trim($this->input('carrier', 'DHL Express'));
         $origin = trim($this->input('origin', ''));
         $destination = trim($this->input('destination', ''));
+
+        $products = [];
+        $totalAmount = 0.0;
+        $typesList = [];
+        $weightsList = [];
+
+        if (is_array($productTypes)) {
+            foreach ($productTypes as $index => $type) {
+                $t = trim((string)$type);
+                if ($t === '') continue;
+                $w = trim((string)($productWeights[$index] ?? ''));
+                $a = (float) ($amounts[$index] ?? 0.00);
+                
+                $products[] = [
+                    'type' => $t,
+                    'weight' => $w,
+                    'amount' => $a
+                ];
+                $totalAmount += $a;
+                $typesList[] = $t;
+                if ($w !== '') $weightsList[] = $w;
+            }
+        } else {
+            $t = trim((string)$productTypes);
+            $w = trim((string)$productWeights);
+            $a = (float) $amounts;
+            if (!empty($t)) {
+                $products[] = [
+                    'type' => $t,
+                    'weight' => $w,
+                    'amount' => $a
+                ];
+                $totalAmount = $a;
+                $typesList[] = $t;
+                if ($w !== '') $weightsList[] = $w;
+            }
+        }
+
+        $primaryProductType = !empty($typesList) ? implode(', ', $typesList) : 'Goods';
+        $primaryProductWeight = !empty($weightsList) ? implode(', ', $weightsList) : 'N/A';
 
         if (!empty($receiverName) && !empty($destination)) {
             $settings = Session::get('ent_settings', []);
@@ -491,9 +531,10 @@ class AdminEnterpriseController extends Controller
                 'receiver_name' => $receiverName,
                 'receiver_address' => $receiverAddress,
                 'receiver_contact' => $receiverContact,
-                'product_type' => $productType,
-                'product_weight' => $productWeight,
-                'amount' => $amount,
+                'product_type' => $primaryProductType,
+                'product_weight' => $primaryProductWeight,
+                'amount' => $totalAmount,
+                'products' => $products,
                 'carrier' => $carrier,
                 'tracking_code' => $trackingCode,
                 'status' => 'Shipped',

@@ -270,7 +270,14 @@ class OrderController extends Controller
                         'tracking_code' => $s['tracking_code'],
                         'payment_method' => 'PREPAID',
                         'carrier' => $s['carrier'] ?? 'ShopX Logistics',
-                        'items' => [
+                        'items' => !empty($s['products']) && is_array($s['products']) ? array_map(function($p) {
+                            return [
+                                'name' => ($p['type'] ?? 'Goods') . (!empty($p['weight']) ? ' (' . $p['weight'] . ')' : ''),
+                                'qty' => 1,
+                                'price' => $p['amount'] ?? 0.00,
+                                'total' => $p['amount'] ?? 0.00
+                            ];
+                        }, $s['products']) : [
                             [
                                 'name' => ($s['product_type'] ?? 'Goods') . ' (' . ($s['product_weight'] ?? 'N/A') . ')',
                                 'qty' => 1,

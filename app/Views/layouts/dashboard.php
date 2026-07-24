@@ -165,28 +165,31 @@
                     <p style="font-size: 0.85rem; color: var(--text-muted);">Welcome back, <strong style="color: var(--text-secondary);"><?= e(Auth::name()) ?></strong></p>
                 </div>
             </div>
-            <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;" class="ml-auto">
                 <span class="dash-wallet-badge" style="padding: 4px 14px; background: rgba(212,160,23,0.06); border: 1px solid rgba(212,160,23,0.2); color: #D4A017; font-size: 0.8rem; font-weight: 700; border-radius: 20px; font-family: monospace;">
                     <?= formatPrice(Auth::wallet()) ?>
                 </span>
                 <!-- User Profile Avatar with Dropdown -->
                 <style>
                     .avatar-dropdown-item {
-                        display: block;
-                        padding: 0.6rem 1.25rem;
-                        color: var(--text-secondary);
+                        display: flex;
+                        align-items: center;
+                        gap: 0.5rem;
+                        padding: 0.65rem 1.25rem;
+                        color: #ccc;
                         font-size: 0.85rem;
-                        font-weight: 500;
+                        font-weight: 600;
                         transition: all 0.2s ease;
                         text-align: left;
                         text-decoration: none;
+                        white-space: nowrap;
                     }
                     .avatar-dropdown-item:hover {
-                        background: rgba(212, 160, 23, 0.1);
+                        background: rgba(212, 160, 23, 0.15);
                         color: var(--gold-primary);
                     }
                     .avatar-dropdown-item.text-danger:hover {
-                        background: rgba(239, 68, 68, 0.1);
+                        background: rgba(239, 68, 68, 0.15);
                         color: #ef4444;
                     }
                 </style>
@@ -201,7 +204,7 @@
                     </button>
                     
                     <!-- Dropdown Menu -->
-                    <div id="avatarDropdownMenu" style="display: none; position: absolute; right: 0; top: 120%; width: 160px; background: #111; border: 1px solid #2a2a2a; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); z-index: 1000; overflow: hidden; padding: 0.5rem 0;">
+                    <div id="avatarDropdownMenu" style="display: none; position: absolute; right: 0; top: 120%; width: 160px; background: #151515; border: 1px solid #2a2a2a; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); z-index: 1000; overflow: hidden; padding: 0.5rem 0;">
                         <a href="<?= url('/dashboard') ?>" class="avatar-dropdown-item">📊 Dashboard</a>
                         <a href="<?= url('/profile') ?>" class="avatar-dropdown-item">👤 Profile</a>
                         <a href="<?= url('/') ?>" class="avatar-dropdown-item">🏪 Store</a>
@@ -224,7 +227,20 @@
                     if (toggle && menu) {
                         toggle.addEventListener('click', function(e) {
                             e.stopPropagation();
-                            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+                            const isHidden = menu.style.display === 'none' || !menu.style.display;
+                            if (isHidden) {
+                                menu.style.display = 'block';
+                                const rect = menu.getBoundingClientRect();
+                                if (rect.left < 10) {
+                                    menu.style.left = '0';
+                                    menu.style.right = 'auto';
+                                } else {
+                                    menu.style.right = '0';
+                                    menu.style.left = 'auto';
+                                }
+                            } else {
+                                menu.style.display = 'none';
+                            }
                         });
                         
                         document.addEventListener('click', function() {

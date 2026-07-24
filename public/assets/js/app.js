@@ -258,7 +258,15 @@ function loadChatMessages() {
    ============================================= */
 let deferredPrompt = null;
 
+function isMobileView() {
+    return window.innerWidth <= 768 || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 function showPWABanner() {
+    if (!isMobileView()) {
+        hidePWABanner();
+        return;
+    }
     const card = document.getElementById('pwaFloatingCard');
     const sec = document.getElementById('pwaSection');
     if (card) {
@@ -289,6 +297,17 @@ function hidePWABanner() {
 }
 
 function initPWAInstall() {
+    // 0. Only run install card logic on mobile view
+    if (!isMobileView()) {
+        hidePWABanner();
+    }
+
+    window.addEventListener('resize', () => {
+        if (!isMobileView()) {
+            hidePWABanner();
+        }
+    });
+
     // 1. Check if already running in standalone mode (installed PWA)
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
                          window.navigator.standalone === true || 
@@ -313,7 +332,9 @@ function initPWAInstall() {
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
-        showPWABanner();
+        if (isMobileView()) {
+            showPWABanner();
+        }
     });
 
     // 4. Handle iOS Safari installation text
@@ -338,8 +359,10 @@ function initPWAInstall() {
         deferredPrompt = null;
     });
 
-    // 6. Show the widget automatically when visiting the website!
-    setTimeout(showPWABanner, 600);
+    // 6. Show the widget automatically when visiting on mobile!
+    if (isMobileView()) {
+        setTimeout(showPWABanner, 600);
+    }
 }
 
 window.dismissPWABanner = function() {

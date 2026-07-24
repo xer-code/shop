@@ -30,12 +30,28 @@
 
                 <!-- Product Details -->
                 <div style="border-bottom: 1px solid #222; padding-bottom: 0.75rem; margin-bottom: 0.75rem;">
-                    <h4 style="font-size: 0.75rem; font-weight: 700; color: var(--gold-primary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">3. Products & Value</h4>
-                    <div class="grid grid-cols-2 gap-2">
-                        <input type="text" name="product_type" required placeholder="Product Type (e.g. Parts)" class="input-dark text-xs">
-                        <input type="text" name="product_weight" placeholder="Weight (e.g. 5kg)" class="input-dark text-xs">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <h4 style="font-size: 0.75rem; font-weight: 700; color: var(--gold-primary); text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">3. Products & Value</h4>
+                        <button type="button" id="add-product-btn" style="background: rgba(212, 160, 23, 0.15); color: #D4A017; border: 1px solid rgba(212, 160, 23, 0.3); padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.7rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 0.25rem;" class="hover:bg-[#D4A017] hover:text-black transition-colors">
+                            <span>+</span> Add Product
+                        </button>
                     </div>
-                    <input type="number" name="amount" step="0.01" required placeholder="Declared Value Amount ($)" class="input-dark text-xs mt-2">
+
+                    <div id="products-list" class="space-y-3">
+                        <div class="product-item p-2.5 bg-[#111] border border-[#2a2a2a] rounded-lg relative space-y-2">
+                            <div class="flex justify-between items-center text-[10px] font-bold text-gray-400">
+                                <span class="product-index-label">Product #1</span>
+                                <button type="button" class="remove-product-btn text-red-400 hover:text-red-300 text-[10px] font-bold px-1.5 py-0.5 bg-red-950/40 border border-red-900/50 rounded hidden" title="Remove product">
+                                    ✕ Remove
+                                </button>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <input type="text" name="product_type[]" required placeholder="Product Type (e.g. Parts)" class="input-dark text-xs">
+                                <input type="text" name="product_weight[]" placeholder="Weight (e.g. 5kg)" class="input-dark text-xs">
+                            </div>
+                            <input type="number" name="amount[]" step="0.01" required placeholder="Declared Value Amount ($)" class="input-dark text-xs">
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Carrier & Routing -->
@@ -96,6 +112,16 @@
                                     <td class="text-xs">
                                         <div class="font-bold text-white"><?= e($s['receiver_name'] ?? 'N/A') ?></div>
                                         <div class="text-[10px] text-gray-500"><?= e($s['receiver_contact'] ?? '') ?></div>
+                                        <?php if (!empty($s['products']) && is_array($s['products'])): ?>
+                                            <div class="text-[10px] text-[#D4A017] mt-1 flex flex-wrap gap-1">
+                                                <span class="font-semibold">📦 <?= count($s['products']) ?> <?= count($s['products']) === 1 ? 'Product' : 'Products' ?>:</span>
+                                                <span class="text-gray-300"><?= e(implode(', ', array_map(fn($p) => $p['type'] ?? 'Item', $s['products']))) ?></span>
+                                            </div>
+                                        <?php elseif (!empty($s['product_type'])): ?>
+                                            <div class="text-[10px] text-[#D4A017] mt-1">
+                                                📦 <?= e($s['product_type']) ?>
+                                            </div>
+                                        <?php endif; ?>
                                     </td>
                                     <td class="font-mono text-xs text-[#D4A017]"><?= e($s['tracking_code']) ?></td>
                                     <td class="text-xs">
@@ -144,3 +170,69 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const productsList = document.getElementById('products-list');
+    const addProductBtn = document.getElementById('add-product-btn');
+
+    function updateProductIndices() {
+        if (!productsList) return;
+        const items = productsList.querySelectorAll('.product-item');
+        items.forEach((item, idx) => {
+            const label = item.querySelector('.product-index-label');
+            if (label) {
+                label.textContent = `Product #${idx + 1}`;
+            }
+            const removeBtn = item.querySelector('.remove-product-btn');
+            if (removeBtn) {
+                if (items.length > 1) {
+                    removeBtn.classList.remove('hidden');
+                } else {
+                    removeBtn.classList.add('hidden');
+                }
+            }
+        });
+    }
+
+    if (addProductBtn && productsList) {
+        addProductBtn.addEventListener('click', function() {
+            const firstItem = productsList.querySelector('.product-item');
+            if (!firstItem) return;
+
+            const newItem = firstItem.cloneNode(true);
+            
+            // Clear inputs inside newly added product block
+            const inputs = newItem.querySelectorAll('input');
+            inputs.forEach(input => {
+                input.value = '';
+            });
+
+            productsList.appendChild(newItem);
+            updateProductIndices();
+
+            // Focus on the first input of the new product
+            const firstInput = newItem.querySelector('input');
+            if (firstInput) {
+                firstInput.focus();
+            }
+        });
+
+        productsList.addEventListener('click', function(e) {
+            const removeBtn = e.target.closest('.remove-product-btn');
+            if (removeBtn) {
+                const items = productsList.querySelectorAll('.product-item');
+                if (items.length > 1) {
+                    const itemToRemove = removeBtn.closest('.product-item');
+                    if (itemToRemove) {
+                        itemToRemove.remove();
+                        updateProductIndices();
+                    }
+                }
+            }
+        });
+
+        updateProductIndices();
+    }
+});
+</script>

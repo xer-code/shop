@@ -342,36 +342,39 @@ if (!function_exists('hasPermission')) {
     <!-- Main Content Wrapper -->
     <main class="admin-main">
         <!-- Top bar -->
-        <header style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 1.5rem; margin-bottom: 2rem; border-bottom: 1px solid var(--border-dark);">
-            <div style="display: flex; align-items: center; gap: 1rem;">
-                <div>
-                    <h1 style="font-size: 1.5rem; font-weight: 800;"><?= e($pageTitle) ?></h1>
-                    <p style="font-size: 0.85rem; color: var(--text-muted);">Signed in as <strong style="color: var(--text-secondary);"><?= e(\App\Core\Auth::name()) ?></strong></p>
+        <header class="flex flex-wrap sm:flex-nowrap justify-between items-center pb-4 mb-6 border-b border-[var(--border-dark)] gap-3">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="min-w-0">
+                    <h1 class="text-xl sm:text-2xl font-extrabold truncate" style="line-height: 1.2;"><?= e($pageTitle) ?></h1>
+                    <p class="text-xs sm:text-sm text-[var(--text-muted)] truncate">Signed in as <strong class="text-[var(--text-secondary)]"><?= e(\App\Core\Auth::name()) ?></strong></p>
                 </div>
             </div>
-            <div style="display: flex; align-items: center; gap: 1rem;">
-                <span style="padding: 4px 12px; background: var(--gold-glow); border: 1px solid var(--border-gold); color: var(--gold-primary); font-size: 0.75rem; font-weight: 700; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em;">
+            <div class="flex items-center gap-2 sm:gap-4 shrink-0 ml-auto">
+                <span class="hidden sm:inline-flex items-center px-3 py-1 bg-[var(--gold-glow)] border border-[var(--border-gold)] text-[var(--gold-primary)] text-xs font-bold rounded-full uppercase tracking-wider">
                     🛡️ System Administrator
                 </span>
                 
                 <!-- Admin Profile Avatar with Dropdown -->
                 <style>
                     .avatar-dropdown-item {
-                        display: block;
-                        padding: 0.6rem 1.25rem;
-                        color: var(--text-secondary);
+                        display: flex;
+                        align-items: center;
+                        gap: 0.5rem;
+                        padding: 0.65rem 1.25rem;
+                        color: #ccc;
                         font-size: 0.85rem;
-                        font-weight: 500;
+                        font-weight: 600;
                         transition: all 0.2s ease;
                         text-align: left;
                         text-decoration: none;
+                        white-space: nowrap;
                     }
                     .avatar-dropdown-item:hover {
-                        background: rgba(212, 160, 23, 0.1);
+                        background: rgba(212, 160, 23, 0.15);
                         color: var(--gold-primary);
                     }
                     .avatar-dropdown-item.text-danger:hover {
-                        background: rgba(239, 68, 68, 0.1);
+                        background: rgba(239, 68, 68, 0.15);
                         color: #ef4444;
                     }
                 </style>
@@ -389,7 +392,7 @@ if (!function_exists('hasPermission')) {
                     </button>
                     
                     <!-- Dropdown Menu -->
-                    <div id="avatarDropdownMenu" style="display: none; position: absolute; right: 0; top: 120%; width: 160px; background: #111; border: 1px solid var(--border-dark); border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); z-index: 1000; overflow: hidden; padding: 0.5rem 0;">
+                    <div id="avatarDropdownMenu" style="display: none; position: absolute; right: 0; top: 120%; width: 160px; background: #151515; border: 1px solid var(--border-dark); border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); z-index: 1000; overflow: hidden; padding: 0.5rem 0;">
                         <a href="<?= url('/admin/profile') ?>" class="avatar-dropdown-item">👤 Profile</a>
                         <a href="<?= url('/logout') ?>" class="avatar-dropdown-item text-danger">🚪 Logout</a>
                     </div>
@@ -410,7 +413,21 @@ if (!function_exists('hasPermission')) {
                     if (toggle && menu) {
                         toggle.addEventListener('click', function(e) {
                             e.stopPropagation();
-                            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+                            const isHidden = menu.style.display === 'none' || !menu.style.display;
+                            if (isHidden) {
+                                menu.style.display = 'block';
+                                // Clamp menu positioning if it goes off left edge of screen
+                                const rect = menu.getBoundingClientRect();
+                                if (rect.left < 10) {
+                                    menu.style.left = '0';
+                                    menu.style.right = 'auto';
+                                } else {
+                                    menu.style.right = '0';
+                                    menu.style.left = 'auto';
+                                }
+                            } else {
+                                menu.style.display = 'none';
+                            }
                         });
                         
                         document.addEventListener('click', function() {
