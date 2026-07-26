@@ -15,6 +15,10 @@ $router->get('/', 'HomeController@index');
 // Offline page
 $router->get('/offline', 'HomeController@offline');
 
+// Download App page
+$router->get('/download', 'HomeController@download');
+$router->get('/app-release.apk', 'HomeController@downloadApk');
+
 // Shop
 $router->get('/shop', 'ShopController@index');
 $router->get('/shop/{id}', 'ShopController@show');

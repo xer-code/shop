@@ -254,7 +254,7 @@ function loadChatMessages() {
 }
 
 /* =============================================
-   5. PWA Install Logic (Floating Mobile Banner)
+   5. PWA & Mobile App Install Logic
    ============================================= */
 let deferredPrompt = null;
 
@@ -328,7 +328,61 @@ function initPWAInstall() {
         }
     }
 
-    // 3. Listen for native browser beforeinstallprompt event (Android/Chrome/Edge)
+    // 3. Setup platform specific UI texts
+    const ua = window.navigator.userAgent.toLowerCase();
+    const isIos = /iphone|ipad|ipod/.test(ua);
+
+    const cardTitle = document.querySelector('.pwa-card-title');
+    const cardSubtitle = document.getElementById('pwaCardSubtitle');
+    const cardBtn = document.getElementById('pwaCardInstallBtn');
+
+    const bannerTitle = document.querySelector('.pwa-banner h3');
+    const bannerSubtitle = document.querySelector('.pwa-banner p');
+    const bannerBtn = document.getElementById('pwaInstallBtn');
+
+    if (isIos) {
+        if (cardTitle) cardTitle.textContent = 'Add to Home Screen';
+        if (cardSubtitle) cardSubtitle.innerHTML = 'Tap <span style="font-weight:700; text-decoration:underline;">Share 📤</span> and select <span style="font-weight:700; text-decoration:underline;">Add to Home Screen</span>';
+        if (cardBtn) {
+            cardBtn.innerHTML = `
+                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                    <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                </svg>
+                <span>Share to Home Screen</span>
+            `;
+        }
+
+        if (bannerTitle) bannerTitle.textContent = 'Add ShopX to Home Screen';
+        if (bannerSubtitle) bannerSubtitle.textContent = 'Tap Share 📤 and select Add to Home Screen in Safari';
+        if (bannerBtn) {
+            bannerBtn.innerHTML = `
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                <span>Share to Home Screen</span>
+            `;
+        }
+    } else {
+        if (cardTitle) cardTitle.textContent = 'Install ShopX App';
+        if (cardSubtitle) cardSubtitle.textContent = 'Download official Android App (APK)';
+        if (cardBtn) {
+            cardBtn.innerHTML = `
+                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                    <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                </svg>
+                <span>Download Android App</span>
+            `;
+        }
+
+        if (bannerTitle) bannerTitle.textContent = 'Download ShopX Android App';
+        if (bannerSubtitle) bannerSubtitle.textContent = 'Download the official app APK directly to your device';
+        if (bannerBtn) {
+            bannerBtn.innerHTML = `
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                <span>Download Android App</span>
+            `;
+        }
+    }
+
+    // 4. Listen for native browser beforeinstallprompt event (Android/Chrome/Edge)
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
@@ -336,21 +390,6 @@ function initPWAInstall() {
             showPWABanner();
         }
     });
-
-    // 4. Handle iOS Safari installation text
-    const ua = window.navigator.userAgent.toLowerCase();
-    const isIos = /iphone|ipad|ipod/.test(ua);
-    if (isIos && !isStandalone) {
-        const sub = document.getElementById('pwaCardSubtitle');
-        const btn = document.getElementById('pwaCardInstallBtn');
-        if (sub && btn) {
-            sub.innerHTML = 'Tap <span style="font-weight:700; text-decoration:underline;">Share</span> and select <span style="font-weight:700; text-decoration:underline;">Add to Home Screen</span>';
-            btn.innerHTML = '📱 How to Install on iOS';
-            btn.onclick = function() {
-                alert('To install this app on your iPhone/iPad:\n\n1. Tap the Share icon (box with arrow up) at the bottom of Safari.\n2. Scroll down and tap "Add to Home Screen".\n3. Tap "Add" at top right.');
-            };
-        }
-    }
 
     // 5. Hide banner permanently once installed
     window.addEventListener('appinstalled', () => {
@@ -370,23 +409,74 @@ window.dismissPWABanner = function() {
     hidePWABanner();
 };
 
-window.installPWA = function() {
-    if (deferredPrompt) {
-        deferredPrompt.prompt();
-        deferredPrompt.userChoice.then((choiceResult) => {
-            if (choiceResult.outcome === 'accepted') {
-                localStorage.setItem('pwaInstalled', 'true');
-                hidePWABanner();
-            }
-            deferredPrompt = null;
-        });
+window.showIosInstallModal = function() {
+    const modal = document.getElementById('iosInstallModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.add('active');
     } else {
-        const ua = window.navigator.userAgent.toLowerCase();
-        const isIos = /iphone|ipad|ipod/.test(ua);
-        if (isIos) {
-            alert('To install this app on your iPhone/iPad:\n\n1. Tap the Share icon (box with arrow up) at the bottom of Safari.\n2. Scroll down and tap "Add to Home Screen".\n3. Tap "Add" at top right.');
+        alert('To install this app on your iPhone/iPad:\n\n1. Tap the Share icon (box with arrow up 📤) at the bottom of Safari.\n2. Scroll down and tap "Add to Home Screen".\n3. Tap "Add" at top right.');
+    }
+};
+
+window.closeIosModal = function() {
+    const modal = document.getElementById('iosInstallModal');
+    if (modal) {
+        modal.classList.remove('active');
+        modal.style.display = 'none';
+    }
+};
+
+window.installPWA = function() {
+    const ua = window.navigator.userAgent.toLowerCase();
+    const isIos = /iphone|ipad|ipod/.test(ua);
+
+    if (isIos) {
+        // iOS: Share to Home Screen
+        if (navigator.share) {
+            navigator.share({
+                title: document.title || 'ShopX Global',
+                text: 'Add ShopX Global to your Home Screen',
+                url: window.location.href
+            }).then(() => {
+                showToast('info', 'Tap "Add to Home Screen" in the share menu.');
+            }).catch(() => {
+                // If user cancels or navigator.share aborts, show modal guide
+                showIosInstallModal();
+            });
         } else {
-            alert('To install this app on your device:\n\n1. Tap your browser menu (3 dots ⋮ or Share icon at top/bottom).\n2. Select "Add to Home Screen" or "Install App".');
+            showIosInstallModal();
+        }
+    } else {
+        // Android / Mobile: Download android app APK (app-release.apk)
+        // 1. Try to find an existing download link on the current page
+        const existingBtn = document.querySelector('a[download="app-release.apk"]');
+        let targetHref;
+        if (existingBtn) {
+            targetHref = existingBtn.href;
+        } else {
+            // 2. Compute base URL from current page location
+            //    Remove trailing segments like /download, /shop, etc.
+            const base = window.location.origin +
+                window.location.pathname.replace(/\/(?:download|shop|public|cart|checkout|login|register|profile|dashboard)?\/?$/i, '');
+            targetHref = base + '/app-release.apk';
+        }
+        const apkLink = document.createElement('a');
+        apkLink.href = targetHref;
+        apkLink.download = 'app-release.apk';
+        document.body.appendChild(apkLink);
+        apkLink.click();
+        apkLink.remove();
+
+        showToast('success', '📥 Downloading Android App (app-release.apk)...');
+
+        if (deferredPrompt) {
+            setTimeout(() => {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then(() => {
+                    deferredPrompt = null;
+                });
+            }, 1200);
         }
     }
 };

@@ -1,8 +1,12 @@
+AddType application/vnd.android.package-archive .apk
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
     # Block sensitive directories and files from direct web access
-    RewriteRule ^(\.env|app|config|database) - [F,L]
+    # Note: use app/ (not app) to avoid blocking app-release.apk
+    RewriteRule ^\.env - [F,L]
+    RewriteRule ^(app|config|database)/ - [F,L]
 
     # If the request is for a real file or directory in root, serve it directly
     RewriteCond %{REQUEST_FILENAME} -f [OR]

@@ -52,3 +52,9 @@ define('APP_PATH', ROOT_PATH . '/app');
 define('VIEW_PATH', APP_PATH . '/Views');
 define('PUBLIC_PATH', ROOT_PATH . '/public');
 define('ASSET_PATH', '/assets');
+
+// Ensure app-release.apk is accessible in public web root
+if (file_exists(ROOT_PATH . '/app-release.apk') && !file_exists(PUBLIC_PATH . '/app-release.apk')) {
+    @copy(ROOT_PATH . '/app-release.apk', PUBLIC_PATH . '/app-release.apk');
+}
+
