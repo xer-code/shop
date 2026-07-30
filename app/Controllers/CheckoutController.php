@@ -120,6 +120,17 @@ class CheckoutController extends Controller
             
             $db->commit();
             
+            // Dispatch order confirmation email
+            if (Auth::email()) {
+                \App\Core\Mailer::sendTriggerEmail('order_confirmation', Auth::email(), [
+                    'name' => Auth::name(),
+                    'order_id' => $orderId,
+                    'total' => formatPrice($total),
+                    'tracking_code' => $trackingCode,
+                    'shipping_address' => $shippingAddress
+                ], Auth::name());
+            }
+            
             Session::flash('success', 'Order placed successfully! Tracking: ' . $trackingCode);
             $this->redirect('/checkout/success/' . $orderId);
         } catch (\Exception $e) {

@@ -84,6 +84,26 @@
                     </button>
                 </form>
             </div>
+
+            <!-- Direct Email Form -->
+            <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6 space-y-4">
+                <h4 class="text-sm font-bold text-white uppercase tracking-wider border-b border-[#2a2a2a] pb-2">📧 Direct Email Dispatcher</h4>
+                <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-2">Send an email directly to this customer.</p>
+                <form action="<?= url('/admin/customers/email/' . $c['id']) ?>" method="POST" class="space-y-4">
+                    <?= csrf_field() ?>
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Subject</label>
+                        <input type="text" name="subject" required class="input-dark text-xs w-full" placeholder="Enter email subject">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Message HTML</label>
+                        <textarea name="message" required class="input-dark text-xs w-full min-h-[120px]" placeholder="Write your HTML or plain text message here..."></textarea>
+                    </div>
+                    <button type="submit" class="bg-[#222] border border-[#2a2a2a] hover:border-[#D4A017] text-white hover:text-black hover:bg-[#D4A017] w-full text-xs py-2 justify-center font-bold rounded-lg transition-all">
+                        📤 Send Email
+                    </button>
+                </form>
+            </div>
         </div>
 
         <!-- Right Side: Wallet History logs -->

@@ -58,6 +58,12 @@ class AdminUserController extends Controller
             'wallet_balance' => 0.00
         ]);
 
+        // Dispatch welcome email
+        \App\Core\Mailer::sendTriggerEmail('user_welcome', $email, [
+            'name' => $name,
+            'email' => $email
+        ], $name);
+
         // Audit log
         $logs = Session::get('ent_audit_logs', []);
         $logs[] = [

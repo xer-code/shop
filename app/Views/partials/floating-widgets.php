@@ -45,6 +45,35 @@ $appName = $sysSettings['app_name'] ?? 'ShopX-Global';
     </button>
 </div>
 
+<!-- iOS Share to Home Screen Guidance Modal -->
+<div id="iosInstallModal" class="modal-overlay" style="display: none; z-index: 100000;" onclick="closeIosModal()">
+    <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 360px; text-align: center; border-radius: 24px; padding: 2rem; background: #121214; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 25px 50px rgba(0,0,0,0.8);">
+        <div style="font-size: 3rem; margin-bottom: 0.75rem;">📱</div>
+        <h3 style="color: white; font-size: 1.25rem; font-weight: 800; margin-bottom: 0.5rem;">Add to Home Screen</h3>
+        <p style="color: var(--text-muted); font-size: 0.88rem; line-height: 1.5; margin-bottom: 1.25rem;">
+            To install <strong><?= e($appName) ?></strong> on your iPhone or iPad:
+        </p>
+        <div style="text-align: left; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 1rem; margin-bottom: 1.5rem; font-size: 0.85rem; color: #ddd; display: flex; flex-direction: column; gap: 0.85rem;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <span style="background: rgba(124,58,237,0.4); color: #c4b5fd; border-radius: 50%; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.75rem; flex-shrink: 0;">1</span>
+                <span>Tap the <strong>Share</strong> icon <span style="font-size: 1.1rem;">📤</span> at bottom of Safari.</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <span style="background: rgba(124,58,237,0.4); color: #c4b5fd; border-radius: 50%; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.75rem; flex-shrink: 0;">2</span>
+                <span>Scroll down & tap <strong>"Add to Home Screen"</strong>.</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <span style="background: rgba(124,58,237,0.4); color: #c4b5fd; border-radius: 50%; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.75rem; flex-shrink: 0;">3</span>
+                <span>Tap <strong>"Add"</strong> in top right corner.</span>
+            </div>
+        </div>
+        <button type="button" onclick="closeIosModal()" style="width: 100%; padding: 0.8rem; background: linear-gradient(135deg, var(--gold-primary), var(--gold-dark)); color: #000; border: none; border-radius: 14px; font-weight: 700; cursor: pointer; font-size: 0.95rem; box-shadow: 0 4px 15px rgba(212,160,23,0.3);">
+            Got it!
+        </button>
+    </div>
+</div>
+
+
 <!-- Floating Widgets -->
 <div class="floating-widgets">
     <!-- Globe / Language -->
@@ -57,8 +86,9 @@ $appName = $sysSettings['app_name'] ?? 'ShopX-Global';
 
     <!-- Chat -->
     <div class="chat-widget">
-        <button class="chat-btn" aria-label="Open live chat" onclick="toggleChat()" id="chatToggleBtn">
+        <button class="chat-btn" aria-label="Open live chat" onclick="toggleChat()" id="chatToggleBtn" style="position: relative;">
             💬
+            <span id="chatWidgetBadge" class="chat-unread-badge" style="display: none;">0</span>
         </button>
     </div>
 </div>
@@ -67,8 +97,14 @@ $appName = $sysSettings['app_name'] ?? 'ShopX-Global';
 <div class="chat-panel" id="chatPanel">
     <div class="chat-panel-header">
         <div>
-            <h3 style="font-size: 1rem; font-weight: 700;">💬 Live Chat</h3>
-            <p style="font-size: 0.75rem; color: var(--text-muted);">We typically reply within minutes</p>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <h3 style="font-size: 1rem; font-weight: 700; margin: 0;">💬 Live Chat</h3>
+                <span id="chatStatusBadge" class="chat-status-badge offline">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Offline</span>
+                </span>
+            </div>
+            <p id="chatStatusSubtitle" style="font-size: 0.75rem; color: var(--text-muted); margin: 2px 0 0 0;">Checking support availability...</p>
         </div>
         <button onclick="toggleChat()" style="background: none; border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer;">&times;</button>
     </div>
@@ -88,6 +124,30 @@ $appName = $sysSettings['app_name'] ?? 'ShopX-Global';
         </button>
     </div>
 </div>
+
+
+<!-- Pusher Chat Config & Script -->
+<?php
+$settings = \App\Core\Session::get('ent_settings', []);
+$currentUrl = $_SERVER['REQUEST_URI'] ?? '';
+$langPrefix = 'en';
+if (preg_match('#^/([a-z]{2})/#', $currentUrl, $matches)) {
+    $langPrefix = $matches[1];
+}
+?>
+<script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
+<script>
+window.SHOPX_CHAT_CONFIG = {
+    pusherKey: <?= json_encode($settings['pusher_key'] ?? '') ?>,
+    pusherCluster: <?= json_encode($settings['pusher_cluster'] ?? 'mt1') ?>,
+    userId: <?= json_encode(\App\Core\Auth::id()) ?>,
+    sessionId: <?= json_encode(session_id()) ?>,
+    authEndpoint: '<?= url("/{$langPrefix}/pusher/auth") ?>',
+    sendEndpoint: '<?= url("/{$langPrefix}/chat/send") ?>',
+    messagesEndpoint: '<?= url("/{$langPrefix}/chat/messages") ?>',
+    csrfToken: '<?= \App\Core\Session::generateCsrf() ?>'
+};
+</script>
 
 <!-- Language Modal Backdrop & Box -->
 <div class="language-modal-backdrop" id="langModalBackdrop" onclick="closeLanguageModal()" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65); backdrop-filter: blur(4px); z-index: 9999; align-items: center; justify-content: center;">

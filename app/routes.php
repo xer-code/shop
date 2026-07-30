@@ -50,6 +50,9 @@ $router->get('/logout', 'AuthController@logout');
 // Live Chat (accessible to guests and authenticated users)
 $router->post('/chat/send', 'ChatController@send');
 $router->get('/chat/messages', 'ChatController@messages');
+$router->get('/chat/admin-status', 'ChatController@adminStatus');
+$router->post('/pusher/auth', 'PusherAuthController@auth');
+
 
 // ============================================
 // AUTHENTICATED ROUTES
@@ -189,6 +192,11 @@ $router->group(['prefix' => 'admin', 'middleware' => 'admin'], function ($router
     $router->get('/settings', 'Admin\\AdminEnterpriseController@settings');
     $router->post('/settings/update', 'Admin\\AdminEnterpriseController@updateSettings');
     
+    $router->get('/email-settings', 'Admin\\AdminEnterpriseController@emailSettings');
+    $router->post('/email-settings/update', 'Admin\\AdminEnterpriseController@updateEmailSettings');
+    $router->post('/email-settings/test', 'Admin\\AdminEnterpriseController@sendTestEmail');
+    $router->post('/email-settings/templates/update', 'Admin\\AdminEnterpriseController@updateEmailTemplates');
+    
     $router->get('/roles', 'Admin\\AdminEnterpriseController@roles');
     $router->post('/roles/create', 'Admin\\AdminEnterpriseController@createRole');
     $router->post('/roles/delete/{roleName}', 'Admin\\AdminEnterpriseController@deleteRole');
@@ -216,6 +224,7 @@ $router->group(['prefix' => 'admin', 'middleware' => 'admin'], function ($router
     $router->post('/customers/update-profile/{id}', 'Admin\\AdminEnterpriseController@updateCustomerProfile');
     $router->post('/customers/update-balance/{id}', 'Admin\\AdminEnterpriseController@updateCustomerBalance');
     $router->post('/customers/update-status/{id}', 'Admin\\AdminEnterpriseController@updateCustomerStatus');
+    $router->post('/customers/email/{id}', 'Admin\\AdminEnterpriseController@emailCustomer');
     $router->post('/customers/create', 'Admin\\AdminEnterpriseController@createCustomer');
     $router->post('/customers/delete/{id}', 'Admin\\AdminEnterpriseController@deleteCustomer');
 
@@ -223,7 +232,10 @@ $router->group(['prefix' => 'admin', 'middleware' => 'admin'], function ($router
     $router->get('/profile', 'Admin\\AdminEnterpriseController@profile');
     $router->post('/profile/update', 'Admin\\AdminEnterpriseController@updateProfile');
 
-    // Live Chat
-    $router->get('/live-chat', 'Admin\\AdminEnterpriseController@liveChat');
-    $router->post('/live-chat/reply/{userId}', 'Admin\\AdminEnterpriseController@liveChatReply');
+    // Live Chat & Heartbeat
+    $router->get('/live-chat', 'Admin\AdminEnterpriseController@liveChat');
+    $router->post('/live-chat/reply/{identifier}', 'Admin\AdminEnterpriseController@liveChatReply');
+    $router->post('/live-chat/delete/{identifier}', 'Admin\AdminEnterpriseController@liveChatDelete');
+    $router->post('/live-chat/toggle-status', 'Admin\AdminEnterpriseController@toggleChatStatus');
+    $router->post('/heartbeat', 'Admin\\AdminEnterpriseController@adminHeartbeat');
 });

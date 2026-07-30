@@ -60,6 +60,7 @@
                 <li><a href="<?= url('/track-order') ?>">Track Order</a></li>
                 <li><a href="<?= url('/gift-cards') ?>">Gift Cards</a></li>
                 <li><a href="<?= url('/virtual-stores') ?>">Virtual Store</a></li>
+                <li><a href="<?= url('/download') ?>">Download App</a></li>
             </ul>
         </div>
     </div>

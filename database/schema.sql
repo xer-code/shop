@@ -205,3 +205,15 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     INDEX idx_session_chat (session_id),
     INDEX idx_sender (sender)
 ) ENGINE=InnoDB;
+
+-- =============================================
+-- Admin Online Status (Heartbeat)
+-- =============================================
+CREATE TABLE IF NOT EXISTS admin_online_status (
+    admin_id INT PRIMARY KEY,
+    last_heartbeat INT NOT NULL,
+    is_online TINYINT(1) DEFAULT 1,
+    FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+

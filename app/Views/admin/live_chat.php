@@ -1,7 +1,27 @@
+<?php
+$currentUrl = $_SERVER['REQUEST_URI'] ?? '';
+$langPrefix = 'en';
+if (preg_match('#^/([a-z]{2})/#', $currentUrl, $matches)) {
+    $langPrefix = $matches[1];
+}
+?>
 <div class="fade-in space-y-6">
-    <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
-        <h3 class="text-lg font-bold text-white">💬 Live Chat Messages</h3>
-        <p class="text-xs text-gray-500">View and reply to customer live chat conversations in real-time</p>
+    <div class="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6 flex justify-between items-center">
+        <div>
+            <h3 class="text-lg font-bold text-white">💬 Live Chat Messages</h3>
+            <p class="text-xs text-gray-500">View and reply to customer live chat conversations in real-time</p>
+        </div>
+        
+        <!-- Online/Offline Toggle -->
+        <div class="flex items-center gap-3">
+            <span class="text-xs font-bold text-gray-400 uppercase tracking-widest" id="statusLabel">
+                <?= $isOnline ? 'Online' : 'Offline' ?>
+            </span>
+            <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="adminOnlineToggle" class="sr-only peer" <?= $isOnline ? 'checked' : '' ?>>
+                <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+            </label>
+        </div>
     </div>
 
     <div style="display: grid; grid-template-columns: 320px 1fr; gap: 1.5rem; min-height: 550px;">
@@ -64,7 +84,18 @@
                             <div style="font-size: 0.65rem; color: #555; font-family: monospace;"><?= e($selectedUser['email']) ?></div>
                         </div>
                     </div>
-                    <span style="font-size: 0.65rem; color: #555;"><?= count($selectedMessages) ?> messages</span>
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <span style="font-size: 0.65rem; color: #555;"><?= count($selectedMessages) ?> messages</span>
+                        <form method="POST" action="<?= url('/' . $langPrefix . '/admin/live-chat/delete/' . (!empty($selectedUserId) ? $selectedUserId : $selectedGuestId)) ?>" onsubmit="return confirm('Are you sure you want to delete this conversation? This cannot be undone.');">
+                            <?= csrf_field() ?>
+                            <button type="submit" style="background: none; border: none; color: #ef4444; cursor: pointer; display: flex; align-items: center; gap: 0.35rem; font-size: 0.7rem; padding: 0.3rem 0.6rem; border-radius: 4px; border: 1px solid rgba(239, 68, 68, 0.2); transition: all 0.2s;" onmouseover="this.style.background='rgba(239, 68, 68, 0.1)'" onmouseout="this.style.background='none'">
+                                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                                Delete
+                            </button>
+                        </form>
+                    </div>
                 </div>
 
                 <!-- Messages -->
@@ -92,8 +123,10 @@
 
                 <!-- Reply Form -->
                 <div style="border-top: 1px solid #2a2a2a; padding: 0.85rem 1.25rem;">
-                    <?php $replyIdentifier = !empty($selectedUserId) ? $selectedUserId : $selectedGuestId; ?>
-                    <form id="adminReplyForm" method="POST" action="<?= url('/admin/live-chat/reply/' . $replyIdentifier) ?>" style="display: flex; gap: 0.5rem;">
+                    <?php 
+                    $replyIdentifier = !empty($selectedUserId) ? $selectedUserId : $selectedGuestId; 
+                    ?>
+                    <form id="adminReplyForm" method="POST" action="<?= url('/' . $langPrefix . '/admin/live-chat/reply/' . $replyIdentifier) ?>" style="display: flex; gap: 0.5rem;">
                         <?= csrf_field() ?>
                         <input type="text" id="adminReplyInput" name="message" required placeholder="Type a reply to <?= e($selectedUser['name']) ?>..." class="input-dark" style="flex: 1; font-size: 0.85rem; padding: 0.6rem 0.85rem;" autocomplete="off">
                         <button type="submit" class="btn-gold" style="padding: 0.6rem 1.25rem; font-size: 0.8rem; border-radius: 8px; white-space: nowrap;">
@@ -119,10 +152,92 @@
     const activeUserId = <?= json_encode($selectedUserId) ?>;
     const activeGuestId = <?= json_encode($selectedGuestId) ?>;
     let lastMessageCount = <?= $selectedUser ? count($selectedMessages) : 0 ?>;
+    let pusherClient = null;
+    let pusherAdminChannel = null;
     
     // Auto-scroll to bottom initially
     const chatBox = document.getElementById('chatMessages');
     if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
+
+    function initPusherAdmin() {
+        if (!window.SHOPX_ADMIN_CHAT_CONFIG || !window.SHOPX_ADMIN_CHAT_CONFIG.pusherKey) {
+            console.warn('Pusher not configured for admin. Falling back to HTTP polling.');
+            return false;
+        }
+
+        pusherClient = new Pusher(window.SHOPX_ADMIN_CHAT_CONFIG.pusherKey, {
+            cluster: window.SHOPX_ADMIN_CHAT_CONFIG.pusherCluster,
+            channelAuthorization: {
+                endpoint: window.SHOPX_ADMIN_CHAT_CONFIG.authEndpoint,
+                transport: 'ajax',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }
+        });
+
+        // Admin subscribes to all incoming messages
+        pusherAdminChannel = pusherClient.subscribe('private-admin-chat');
+        
+        pusherAdminChannel.bind('new-message', function(data) {
+            // Check if the message belongs to the currently active conversation
+            const isMatchingUser = activeUserId && data.user_id == activeUserId;
+            const isMatchingGuest = activeGuestId && data.session_id == activeGuestId;
+
+            if (isMatchingUser || isMatchingGuest) {
+                // Instantly append to current thread
+                appendAdminChatBubble(data.message, data.sender);
+                // Also trigger a background poll just to update sidebar ordering quietly
+                pollChatData(true);
+            } else {
+                // It's for another conversation, poll to update the sidebar unread counts
+                pollChatData(false);
+            }
+            
+            // Play notification sound
+            playNotificationSound();
+        });
+
+        return true;
+    }
+
+    function playNotificationSound() {
+        try {
+            const audio = new Audio('/assets/sounds/notification.mp3');
+            audio.play().catch(e => {});
+        } catch(e) {}
+    }
+
+    function appendAdminChatBubble(text, sender) {
+        const chatBox = document.getElementById('chatMessages');
+        if (!chatBox) return;
+
+        const isAdmin = sender === 'admin';
+        const bubbleBg = isAdmin ? 'rgba(212,160,23,0.12)' : '#222';
+        const bubbleBorder = isAdmin ? 'rgba(212,160,23,0.2)' : '#2a2a2a';
+        const bubbleRadius = isAdmin ? '12px 12px 4px 12px' : '12px 12px 12px 4px';
+        const alignment = isAdmin ? 'justify-content: flex-end;' : 'justify-content: flex-start;';
+        const textAlign = isAdmin ? 'right' : 'left';
+        
+        let roleName = '👤 Customer';
+        if (sender === 'admin') roleName = '🛡️ Admin';
+        else if (sender === 'bot') roleName = '🤖 Bot';
+
+        const html = `
+            <div style="display: flex; ${alignment}">
+                <div style="max-width: 70%; padding: 0.65rem 0.85rem; border-radius: ${bubbleRadius}; background: ${bubbleBg}; border: 1px solid ${bubbleBorder};">
+                    <p style="font-size: 0.8rem; color: #ddd; line-height: 1.5; word-wrap: break-word;">${escapeHtml(text)}</p>
+                    <div style="font-size: 0.6rem; color: #555; margin-top: 0.3rem; text-align: ${textAlign};">
+                        ${roleName} · just now
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        chatBox.insertAdjacentHTML('beforeend', html);
+        chatBox.scrollTop = chatBox.scrollHeight;
+        lastMessageCount++;
+    }
 
     // Helper functions
     function escapeHtml(str) {
@@ -150,14 +265,20 @@
         return `${days}d ago`;
     }
 
-    // Ajax polling
-    function pollChatData() {
-        let url = '/admin/live-chat?ajax=1';
+    // Ajax polling (used for initial load, sidebar updates, and fallback)
+    function pollChatData(silentUpdate = false) {
+        const cacheBuster = new Date().getTime();
+        const basePollUrl = (window.SHOPX_ADMIN_CHAT_CONFIG && window.SHOPX_ADMIN_CHAT_CONFIG.pollEndpoint) 
+            ? window.SHOPX_ADMIN_CHAT_CONFIG.pollEndpoint 
+            : '/admin/live-chat';
+            
+        let url = basePollUrl + '?ajax=1&_t=' + cacheBuster;
         if (activeUserId) {
-            url = `/admin/live-chat?user=${activeUserId}&ajax=1`;
+            url = basePollUrl + `?user=${activeUserId}&ajax=1&_t=${cacheBuster}`;
         } else if (activeGuestId) {
-            url = `/admin/live-chat?guest=${activeGuestId}&ajax=1`;
+            url = basePollUrl + `?guest=${activeGuestId}&ajax=1&_t=${cacheBuster}`;
         }
+
         
         fetch(url, {
             headers: {
@@ -167,7 +288,7 @@
         .then(res => res.json())
         .then(data => {
             updateConversationsSidebar(data.conversations, data.selectedUserId, data.selectedGuestId);
-            if ((activeUserId || activeGuestId) && data.selectedMessages) {
+            if (!silentUpdate && (activeUserId || activeGuestId) && data.selectedMessages) {
                 updateMessages(data.selectedMessages);
             }
         })
@@ -189,8 +310,10 @@
             const bgStyle = isSelected ? 'background: #222; border-left: 3px solid #D4A017;' : '';
             const hoverBg = isSelected ? '#222' : 'transparent';
             
-            const linkParam = conv.user_id ? `user=${conv.user_id}` : `guest=${conv.session_id}`;
-            const urlPath = `/admin/live-chat?${linkParam}`;
+            const basePollUrl = (window.SHOPX_ADMIN_CHAT_CONFIG && window.SHOPX_ADMIN_CHAT_CONFIG.pollEndpoint) 
+                ? window.SHOPX_ADMIN_CHAT_CONFIG.pollEndpoint 
+                : '/admin/live-chat';
+            const urlPath = basePollUrl + '?' + linkParam;
             
             let avatarHtml = '';
             if (conv.avatar) {
@@ -297,7 +420,13 @@
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    pollChatData();
+                    if (!pusherClient) {
+                        pollChatData();
+                    } else {
+                        // Optimistically append the admin's own reply
+                        appendAdminChatBubble(message, 'admin');
+                        pollChatData(true); // silent update sidebar
+                    }
                 } else if (data.error) {
                     alert(data.error);
                 }
@@ -308,10 +437,60 @@
         });
     }
 
-    // Start polling every 4 seconds
-    const pollInterval = setInterval(pollChatData, 4000);
+    // Initialize Pusher. If it fails or isn't configured, fall back to polling
+    const isPusherActive = initPusherAdmin();
+    let pollInterval = null;
+    
+    if (!isPusherActive) {
+        pollInterval = setInterval(pollChatData, 4000);
+    }
+
     window.addEventListener('beforeunload', () => {
-        clearInterval(pollInterval);
+        if (pollInterval) clearInterval(pollInterval);
     });
+    // Handle Online/Offline Toggle
+    const onlineToggle = document.getElementById('adminOnlineToggle');
+    const statusLabel = document.getElementById('statusLabel');
+    if (onlineToggle) {
+        onlineToggle.addEventListener('change', function() {
+            const isOnline = this.checked ? 1 : 0;
+            
+            // Optimistic UI update
+            statusLabel.textContent = isOnline ? 'Online' : 'Offline';
+            
+            const formData = new FormData();
+            formData.append('is_online', isOnline);
+            // Append CSRF token if available on page
+            const csrfInput = document.querySelector('input[name="_csrf_token"]');
+            if (csrfInput) {
+                formData.append('_csrf_token', csrfInput.value);
+            }
+            
+            const toggleUrl = (window.SHOPX_ADMIN_CHAT_CONFIG && window.SHOPX_ADMIN_CHAT_CONFIG.toggleStatusEndpoint) 
+                ? window.SHOPX_ADMIN_CHAT_CONFIG.toggleStatusEndpoint 
+                : '/admin/live-chat/toggle-status';
+            
+            fetch(toggleUrl, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    console.log('Status toggled successfully');
+                }
+            })
+            .catch(err => {
+                console.error('Error toggling status:', err);
+                // Revert UI on failure
+                onlineToggle.checked = !isOnline;
+                statusLabel.textContent = !isOnline ? 'Online' : 'Offline';
+            });
+        });
+    }
+
 })();
 </script>

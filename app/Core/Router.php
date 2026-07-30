@@ -158,7 +158,9 @@ class Router
                     header('Location: ' . url('/admin/login'));
                     exit;
                 }
+                Auth::recordAdminHeartbeat();
                 break;
+
             case 'guest':
                 if (Auth::check()) {
                     header('Location: ' . url('/'));

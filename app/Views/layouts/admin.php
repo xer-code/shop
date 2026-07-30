@@ -76,6 +76,23 @@ if (!function_exists('hasPermission')) {
             }
         }
     </style>
+
+    <!-- Pusher Admin Chat Config & Script -->
+    <?php
+    $sysSettings = \App\Core\Session::get('ent_settings', []);
+    ?>
+    <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
+    <script>
+    window.SHOPX_ADMIN_CHAT_CONFIG = {
+        pusherKey: <?= json_encode($sysSettings['pusher_key'] ?? '') ?>,
+        pusherCluster: <?= json_encode($sysSettings['pusher_cluster'] ?? 'mt1') ?>,
+        adminId: <?= json_encode(\App\Core\Auth::id()) ?>,
+        authEndpoint: '<?= url("/{$langPrefix}/pusher/auth") ?>',
+        pollEndpoint: '<?= url("/{$langPrefix}/admin/live-chat") ?>',
+        toggleStatusEndpoint: '<?= url("/{$langPrefix}/admin/live-chat/toggle-status") ?>',
+        csrfToken: '<?= \App\Core\Session::generateCsrf() ?>'
+    };
+    </script>
 </head>
 <body style="background-color: var(--bg-primary); color: var(--text-primary);">
     <!-- Admin Sidebar -->
@@ -97,7 +114,7 @@ if (!function_exists('hasPermission')) {
                 <div class="admin-nav-group-header" style="font-size: 0.75rem; font-weight: 700; color: var(--tan-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem; padding-left: 0.75rem;">📊 Core Admin</div>
                 <ul class="admin-nav" style="margin-top: 0;">
                     <li>
-                        <a href="<?= url('/admin/dashboard') ?>" class="<?= isActive('admin/dashboard') || (isActive('admin') && !isActive('admin/products') && !isActive('admin/users') && !isActive('admin/orders') && !isActive('admin/gift-cards') && !isActive('admin/analytics') && !isActive('admin/customers') && !isActive('admin/suppliers') && !isActive('admin/categories') && !isActive('admin/payments') && !isActive('admin/invoices') && !isActive('admin/quotes') && !isActive('admin/warehouses') && !isActive('admin/shipments') && !isActive('admin/tracking') && !isActive('admin/support') && !isActive('admin/promotions') && !isActive('admin/coupons') && !isActive('admin/notifications') && !isActive('admin/audit-logs') && !isActive('admin/reports') && !isActive('admin/settings') && !isActive('admin/roles') && !isActive('admin/permissions') && !isActive('admin/api-keys')) ? 'active' : '' ?>">
+                        <a href="<?= url('/admin/dashboard') ?>" class="<?= isActive('admin/dashboard') || (isActive('admin') && !isActive('admin/products') && !isActive('admin/users') && !isActive('admin/orders') && !isActive('admin/gift-cards') && !isActive('admin/analytics') && !isActive('admin/customers') && !isActive('admin/suppliers') && !isActive('admin/categories') && !isActive('admin/payments') && !isActive('admin/invoices') && !isActive('admin/quotes') && !isActive('admin/warehouses') && !isActive('admin/shipments') && !isActive('admin/tracking') && !isActive('admin/support') && !isActive('admin/promotions') && !isActive('admin/coupons') && !isActive('admin/notifications') && !isActive('admin/audit-logs') && !isActive('admin/reports') && !isActive('admin/settings') && !isActive('admin/email-settings') && !isActive('admin/roles') && !isActive('admin/permissions') && !isActive('admin/api-keys')) ? 'active' : '' ?>">
                             📊 Dashboard
                         </a>
                     </li>
@@ -273,6 +290,13 @@ if (!function_exists('hasPermission')) {
                     <li>
                         <a href="<?= url('/admin/settings') ?>" class="<?= isActive('admin/settings') ? 'active' : '' ?>">
                             🔧 Settings
+                        </a>
+                    </li>
+                    <?php endif; ?>
+                    <?php if (hasPermission('email_settings')): ?>
+                    <li>
+                        <a href="<?= url('/admin/email-settings') ?>" class="<?= isActive('admin/email-settings') ? 'active' : '' ?>">
+                            📧 Email Settings
                         </a>
                     </li>
                     <?php endif; ?>
@@ -484,7 +508,19 @@ if (!function_exists('hasPermission')) {
                     }
                 }
             });
+
+            // Admin heartbeat ping for Live Chat status
+            function sendAdminHeartbeat() {
+                fetch('<?= url('/admin/heartbeat') ?>', {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                }).catch(err => console.log('Heartbeat ping:', err));
+            }
+            sendAdminHeartbeat();
+            setInterval(sendAdminHeartbeat, 15000);
+
         });
     </script>
 </body>
 </html>
+

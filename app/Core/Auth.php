@@ -141,4 +141,88 @@ class Auth
     {
         return password_hash($password, PASSWORD_BCRYPT);
     }
+
+    /**
+     * Record heartbeat timestamp for an admin user (Unix timestamp)
+     */
+    public static function recordAdminHeartbeat(?int $adminId = null): void
+    {
+        $id = $adminId ?? self::id();
+        if (!$id) return;
+        
+        try {
+            $db = Database::getInstance();
+            $hasTable = $db->query("SHOW TABLES LIKE 'admin_online_status'")->fetch();
+            
+            // Auto-migrate schema if it's the old format or missing the is_online column
+            $hasTable = $db->query("SHOW TABLES LIKE 'admin_online_status'")->fetch();
+            $needsRecreation = false;
+            
+            if ($hasTable) {
+                $col = $db->query("SHOW COLUMNS FROM admin_online_status LIKE 'last_heartbeat'")->fetch();
+                if ($col && str_contains(strtolower($col['Type']), 'timestamp')) {
+                    $needsRecreation = true; // Old timestamp format
+                }
+                
+                $onlineCol = $db->query("SHOW COLUMNS FROM admin_online_status LIKE 'is_online'")->fetch();
+                if (!$onlineCol) {
+                    $needsRecreation = true; // Missing toggle column
+                }
+            } else {
+                $needsRecreation = true;
+            }
+            
+            if ($needsRecreation) {
+                $db->query("DROP TABLE IF EXISTS admin_online_status");
+                $db->query("
+                    CREATE TABLE admin_online_status (
+                        admin_id INT PRIMARY KEY,
+                        last_heartbeat INT NOT NULL,
+                        is_online TINYINT(1) DEFAULT 1,
+                        FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE
+                    ) ENGINE=InnoDB;
+                ");
+            }
+            
+            $now = time();
+            $db->query(
+                "INSERT INTO admin_online_status (admin_id, last_heartbeat) VALUES (?, ?) ON DUPLICATE KEY UPDATE last_heartbeat = ?",
+                [$id, $now, $now]
+            );
+        } catch (\Throwable $e) {
+            // Silence exceptions to keep requests resilient
+        }
+    }
+
+    /**
+     * Check if any admin user has been active recently (within last 120 seconds) and is explicitly online
+     */
+    public static function isAdminOnline(): bool
+    {
+        try {
+            $db = Database::getInstance();
+            $hasTable = $db->query("SHOW TABLES LIKE 'admin_online_status'")->fetch();
+            if (!$hasTable) {
+                return false;
+            }
+
+            // Fallback for old schema if migration somehow didn't run (unlikely)
+            $col = $db->query("SHOW COLUMNS FROM admin_online_status LIKE 'last_heartbeat'")->fetch();
+            if ($col && str_contains(strtolower($col['Type']), 'timestamp')) {
+                $row = $db->query("SELECT COUNT(*) as count FROM admin_online_status WHERE last_heartbeat >= (NOW() - INTERVAL 120 SECOND)")->fetch();
+                if (!empty($row) && (int)$row['count'] > 0) return true;
+            }
+
+            $cutoff = time() - 120;
+            // Ensure they are within cutoff AND is_online is true
+            $row = $db->query(
+                "SELECT COUNT(*) as count FROM admin_online_status WHERE last_heartbeat >= ? AND is_online = 1",
+                [$cutoff]
+            )->fetch();
+            return !empty($row) && (int)$row['count'] > 0;
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
 }
+

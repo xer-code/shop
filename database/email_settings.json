@@ -1,0 +1,11 @@
+{
+    "enabled": true,
+    "driver": "mail",
+    "smtp_host": "smtp.gmail.com",
+    "smtp_port": 587,
+    "smtp_encryption": "tls",
+    "smtp_username": "notifications@shopxglobal.com",
+    "smtp_password": "",
+    "from_email": "noreply@shopxglobal.com",
+    "from_name": "ShopX Global Marketplace"
+}

@@ -80,6 +80,12 @@ class AuthController extends Controller
         Cart::mergeGuestCart(session_id(), $userId);
         $this->updateCartCount();
         
+        // Dispatch welcome email
+        \App\Core\Mailer::sendTriggerEmail('user_welcome', $email, [
+            'name' => $name,
+            'email' => $email
+        ], $name);
+        
         Session::flash('success', 'Welcome to ShopX Global, ' . $name . '!');
         $this->redirect('/');
     }

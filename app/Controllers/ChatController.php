@@ -3,16 +3,36 @@ namespace App\Controllers;
 use App\Core\Controller;
 use App\Core\Auth;
 use App\Models\ChatMessage;
+use App\Core\PusherService;
 
 class ChatController extends Controller
 {
     public function __construct()
     {
         $db = \App\Core\Database::getInstance();
-        $columns = $db->query("SHOW COLUMNS FROM chat_messages LIKE 'session_id'")->fetch();
-        if (!$columns) {
-            $db->query("ALTER TABLE chat_messages ADD COLUMN session_id VARCHAR(128) DEFAULT NULL");
-            $db->query("ALTER TABLE chat_messages ADD INDEX idx_session_chat (session_id)");
+        try {
+            // Ensure chat_messages table exists dynamically so live servers don't crash
+            $db->query("CREATE TABLE IF NOT EXISTS chat_messages (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT DEFAULT NULL,
+                session_id VARCHAR(128) DEFAULT NULL,
+                message TEXT NOT NULL,
+                sender ENUM('user', 'admin', 'bot') NOT NULL DEFAULT 'user',
+                is_read TINYINT(1) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_user_chat (user_id),
+                INDEX idx_session_chat (session_id),
+                INDEX idx_sender (sender)
+            ) ENGINE=InnoDB");
+
+            // Also double check for session_id column in case they had an old table
+            $columns = $db->query("SHOW COLUMNS FROM chat_messages LIKE 'session_id'")->fetch();
+            if (!$columns) {
+                $db->query("ALTER TABLE chat_messages ADD COLUMN session_id VARCHAR(128) DEFAULT NULL");
+                $db->query("ALTER TABLE chat_messages ADD INDEX idx_session_chat (session_id)");
+            }
+        } catch (\PDOException $e) {
+            // Silently ignore if lacking privileges, but at least we tried
         }
     }
 
@@ -43,37 +63,25 @@ class ChatController extends Controller
             'sender' => 'user',
         ]);
         
-        // Check if an admin has ever replied to this user or session
-        $db = \App\Core\Database::getInstance();
-        if ($userId) {
-            $hasAdminReplied = $db->query(
-                "SELECT COUNT(*) as count FROM chat_messages WHERE user_id = ? AND sender = 'admin'",
-                [$userId]
-            )->fetch();
-        } else {
-            $hasAdminReplied = $db->query(
-                "SELECT COUNT(*) as count FROM chat_messages WHERE session_id = ? AND user_id IS NULL AND sender = 'admin'",
-                [$sessionId]
-            )->fetch();
-        }
+        $userName = Auth::user()['name'] ?? 'Guest';
+        $userEmail = Auth::user()['email'] ?? 'Guest Customer';
         
-        $botReply = null;
-        if (!$hasAdminReplied || (int)$hasAdminReplied['count'] === 0) {
-            // Auto-reply bot (only if admin hasn't intervened yet)
-            $botReply = $this->getBotReply($message);
-            ChatMessage::create([
-                'user_id' => $userId,
-                'session_id' => $sessionId,
-                'message' => $botReply,
-                'sender' => 'bot',
-            ]);
-        }
+        PusherService::trigger('private-admin-chat', 'new-message', [
+            'user_id' => $userId,
+            'session_id' => $sessionId,
+            'message' => $message,
+            'sender' => 'user',
+            'created_at' => date('Y-m-d H:i:s'),
+            'name' => $userName,
+            'email' => $userEmail,
+        ]);
         
         $this->json([
             'success' => true,
-            'bot_reply' => $botReply
+            'admin_online' => $this->isAdminOnline()
         ]);
     }
+
     
     public function messages(): void
     {
@@ -105,7 +113,28 @@ class ChatController extends Controller
             );
         }
 
-        $this->json(['messages' => $messages]);
+        $this->json([
+            'messages' => $messages,
+            'admin_online' => $this->isAdminOnline()
+        ]);
+    }
+
+    public function adminStatus(): void
+    {
+        $this->json(['online' => $this->isAdminOnline()]);
+    }
+
+    private function isAdminOnline(): bool
+    {
+        $db = \App\Core\Database::getInstance();
+        $hasStatusTable = $db->query("SHOW TABLES LIKE 'admin_online_status'")->fetch();
+        if (!$hasStatusTable) {
+            return false;
+        }
+        $row = $db->query(
+            "SELECT COUNT(*) as count FROM admin_online_status WHERE last_heartbeat >= (NOW() - INTERVAL 60 SECOND)"
+        )->fetch();
+        return !empty($row) && (int)$row['count'] > 0;
     }
     
     private function getBotReply(string $message): string
@@ -129,3 +158,4 @@ class ChatController extends Controller
         return "Thank you for reaching out! Our support team will get back to you shortly. In the meantime, you can browse our FAQ or explore our shop. Is there anything specific I can help with? 🛍️";
     }
 }
+

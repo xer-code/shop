@@ -58,6 +58,31 @@
                 </div>
             </div>
 
+                </div>
+            </div>
+
+            <div class="border-t border-[#2a2a2a] pt-6">
+                <h4 class="text-sm font-bold text-white mb-4">Real-Time Chat Configuration (Pusher)</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Pusher App ID</label>
+                        <input type="text" name="pusher_app_id" value="<?= e($settings['pusher_app_id'] ?? '') ?>" class="input-dark" placeholder="e.g. 1234567">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Pusher Key</label>
+                        <input type="text" name="pusher_key" value="<?= e($settings['pusher_key'] ?? '') ?>" class="input-dark" placeholder="e.g. abcd1234abcd">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Pusher Secret</label>
+                        <input type="password" name="pusher_secret" value="<?= e($settings['pusher_secret'] ?? '') ?>" class="input-dark" placeholder="e.g. 987654321">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Pusher Cluster</label>
+                        <input type="text" name="pusher_cluster" value="<?= e($settings['pusher_cluster'] ?? 'mt1') ?>" class="input-dark" placeholder="e.g. mt1">
+                    </div>
+                </div>
+            </div>
+
             <div class="border-t border-[#2a2a2a] pt-6">
                 <div class="flex items-center justify-between p-4 bg-[#111] border border-[#2a2a2a] rounded-lg">
                     <div>

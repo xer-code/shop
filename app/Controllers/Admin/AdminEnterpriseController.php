@@ -5,6 +5,7 @@ namespace App\Controllers\Admin;
 use App\Core\Controller;
 use App\Core\Auth;
 use App\Core\Session;
+use App\Core\PusherService;
 use App\Core\Database;
 use App\Models\User;
 use App\Models\Product;
@@ -23,13 +24,41 @@ class AdminEnterpriseController extends Controller
      */
     private function initEnterpriseData(): void
     {
-        // Ensure chat_messages table has session_id column for guest support
         $db = Database::getInstance();
-        $columns = $db->query("SHOW COLUMNS FROM chat_messages LIKE 'session_id'")->fetch();
-        if (!$columns) {
-            $db->query("ALTER TABLE chat_messages ADD COLUMN session_id VARCHAR(128) DEFAULT NULL");
-            $db->query("ALTER TABLE chat_messages ADD INDEX idx_session_chat (session_id)");
+        try {
+            $db->query("CREATE TABLE IF NOT EXISTS chat_messages (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT DEFAULT NULL,
+                session_id VARCHAR(128) DEFAULT NULL,
+                message TEXT NOT NULL,
+                sender ENUM('user', 'admin', 'bot') NOT NULL DEFAULT 'user',
+                is_read TINYINT(1) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_user_chat (user_id),
+                INDEX idx_session_chat (session_id),
+                INDEX idx_sender (sender)
+            ) ENGINE=InnoDB");
+
+            $columns = $db->query("SHOW COLUMNS FROM chat_messages LIKE 'session_id'")->fetch();
+            if (!$columns) {
+                $db->query("ALTER TABLE chat_messages ADD COLUMN session_id VARCHAR(128) DEFAULT NULL");
+                $db->query("ALTER TABLE chat_messages ADD INDEX idx_session_chat (session_id)");
+            }
+        } catch (\PDOException $e) {
         }
+
+        try {
+            $hasStatusTable = $db->query("SHOW TABLES LIKE 'admin_online_status'")->fetch();
+            if (!$hasStatusTable) {
+                $db->query("CREATE TABLE IF NOT EXISTS admin_online_status (
+                    admin_id INT PRIMARY KEY,
+                    last_heartbeat TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB;");
+            }
+        } catch (\PDOException $e) {
+        }
+
 
         // 1. Suppliers
         if (!Session::has('ent_suppliers')) {
@@ -213,6 +242,14 @@ class AdminEnterpriseController extends Controller
                 "INSERT INTO wallet_transactions (user_id, type, amount, description) VALUES (?, 'deposit', ?, 'Refund/Fund load by administrator')",
                 [$id, $amount]
             );
+
+            // Dispatch deposit confirmation email
+            \App\Core\Mailer::sendTriggerEmail('deposit_confirmation', $user['email'], [
+                'name' => $user['name'],
+                'amount' => formatPrice($amount),
+                'gateway_name' => 'Administrator Credit Adjustment',
+                'wallet_balance' => formatPrice($newBalance)
+            ], $user['name']);
 
             $this->logAction("Admin funded customer wallet: " . $user['email'] . " with $" . number_format($amount, 2));
             Session::flash('success', 'Customer wallet funded successfully by $' . number_format($amount, 2));
@@ -555,6 +592,21 @@ class AdminEnterpriseController extends Controller
             ];
             Session::set('ent_tracking', $tracking);
 
+            // Dispatch shipment created email
+            $recipientEmail = filter_var($receiverContact, FILTER_VALIDATE_EMAIL) ? $receiverContact : null;
+            if (!$recipientEmail && Auth::email()) {
+                $recipientEmail = Auth::email();
+            }
+            if ($recipientEmail) {
+                \App\Core\Mailer::sendTriggerEmail('shipment_created', $recipientEmail, [
+                    'receiver_name' => $receiverName,
+                    'tracking_code' => $trackingCode,
+                    'carrier' => $carrier,
+                    'origin' => $origin ?: 'Fulfillment Center',
+                    'destination' => $destination
+                ], $receiverName);
+            }
+
             $this->logAction("Created manual shipment: {$trackingCode} for {$receiverName}");
             Session::flash('success', "Shipment created successfully. Tracking Code: {$trackingCode}");
         } else {
@@ -818,6 +870,41 @@ class AdminEnterpriseController extends Controller
         ];
         Session::set('ent_tracking', $trackingLogs);
         
+        // 4. Dispatch product_tracking_updated email
+        $recipientEmail = null;
+        $recipientName = 'Customer';
+        if (isset($order) && !empty($order['user_id'])) {
+            $user = User::find((int) $order['user_id']);
+            if ($user && !empty($user['email'])) {
+                $recipientEmail = $user['email'];
+                $recipientName = $user['name'];
+            }
+        } else {
+            foreach ($shipments as $s) {
+                if ($s['tracking_code'] === $code) {
+                    if (filter_var($s['receiver_contact'] ?? '', FILTER_VALIDATE_EMAIL)) {
+                        $recipientEmail = $s['receiver_contact'];
+                        $recipientName = $s['receiver_name'] ?? 'Customer';
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (!$recipientEmail && Auth::email()) {
+            $recipientEmail = Auth::email();
+        }
+
+        if ($recipientEmail) {
+            \App\Core\Mailer::sendTriggerEmail('product_tracking_updated', $recipientEmail, [
+                'name' => $recipientName,
+                'tracking_code' => $code,
+                'status' => $status,
+                'location' => $location,
+                'description' => $description
+            ], $recipientName);
+        }
+
         $this->logAction("Updated tracking checkpoint status for waybill {$code} to: {$status}");
         Session::flash('success', "Tracking state for {$code} updated successfully.");
         $this->redirect('/admin/tracking');
@@ -1037,6 +1124,11 @@ class AdminEnterpriseController extends Controller
         $maintenance = (int) $this->input('maintenance_mode', 0);
         $trackingPrefix = trim($this->input('tracking_prefix', 'SX'));
 
+        $pusherAppId = trim($this->input('pusher_app_id', ''));
+        $pusherKey = trim($this->input('pusher_key', ''));
+        $pusherSecret = trim($this->input('pusher_secret', ''));
+        $pusherCluster = trim($this->input('pusher_cluster', 'mt1'));
+
         if (!empty($appName) && !empty($supportEmail)) {
             $settings = Session::get('ent_settings', []);
             
@@ -1091,6 +1183,11 @@ class AdminEnterpriseController extends Controller
             $settings['maintenance_mode'] = $maintenance;
             $settings['tracking_prefix'] = $trackingPrefix;
 
+            $settings['pusher_app_id'] = $pusherAppId;
+            $settings['pusher_key'] = $pusherKey;
+            $settings['pusher_secret'] = $pusherSecret;
+            $settings['pusher_cluster'] = $pusherCluster;
+
             Session::set('ent_settings', $settings);
             $this->logAction("Updated system-wide settings configurations.");
             Session::flash('success', 'System configurations updated.');
@@ -1100,13 +1197,121 @@ class AdminEnterpriseController extends Controller
         $this->redirect('/admin/settings');
     }
 
+    public function emailSettings(): void
+    {
+        $settings = \App\Core\Mailer::getSettings();
+        $templates = \App\Core\Mailer::getTemplates();
+        
+        $logFile = ROOT_PATH . '/database/email_logs.json';
+        $logs = [];
+        if (file_exists($logFile)) {
+            $content = @file_get_contents($logFile);
+            if ($content !== false) {
+                $decoded = json_decode($content, true);
+                if (is_array($decoded)) {
+                    $logs = $decoded;
+                }
+            }
+        }
+
+        $this->render('admin/email_settings', [
+            'pageTitle' => 'Email System Configuration & Templates',
+            'settings' => $settings,
+            'templates' => $templates,
+            'logs' => $logs
+        ], 'admin');
+    }
+
+    public function updateEmailSettings(): void
+    {
+        $this->validateCsrf();
+
+        $enabled = (bool) $this->input('enabled', 0);
+        $driver = trim($this->input('driver', 'smtp'));
+        $fromEmail = trim($this->input('from_email', ''));
+        $fromName = trim($this->input('from_name', ''));
+
+        $smtpHost = trim($this->input('smtp_host', ''));
+        $smtpPort = (int) $this->input('smtp_port', 587);
+        $smtpEncryption = trim($this->input('smtp_encryption', 'tls'));
+        $smtpUsername = trim($this->input('smtp_username', ''));
+        $smtpPassword = trim($this->input('smtp_password', ''));
+
+        if (empty($fromEmail) || !filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
+            Session::flash('error', 'Please provide a valid System From Email address.');
+            $this->redirect('/admin/email-settings');
+            return;
+        }
+
+        $newSettings = [
+            'enabled' => $enabled,
+            'driver' => $driver,
+            'from_email' => $fromEmail,
+            'from_name' => $fromName ?: 'ShopX Global',
+            'smtp_host' => $smtpHost,
+            'smtp_port' => $smtpPort,
+            'smtp_encryption' => $smtpEncryption,
+            'smtp_username' => $smtpUsername,
+            'smtp_password' => $smtpPassword,
+        ];
+
+        \App\Core\Mailer::saveSettings($newSettings);
+        $this->logAction("Updated system email transport settings.");
+        Session::flash('success', 'Email system configurations updated successfully.');
+        $this->redirect('/admin/email-settings');
+    }
+
+    public function sendTestEmail(): void
+    {
+        $this->validateCsrf();
+        $recipient = trim($this->input('test_email', ''));
+
+        if (empty($recipient) || !filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+            Session::flash('error', 'Please provide a valid test recipient email address.');
+            $this->redirect('/admin/email-settings');
+            return;
+        }
+
+        $res = \App\Core\Mailer::sendTestEmail($recipient);
+        if ($res['success']) {
+            Session::flash('success', $res['message']);
+        } else {
+            Session::flash('error', 'Test Email Failed: ' . $res['message']);
+        }
+
+        $this->redirect('/admin/email-settings');
+    }
+
+    public function updateEmailTemplates(): void
+    {
+        $this->validateCsrf();
+        $submitted = $this->input('templates', []);
+
+        if (is_array($submitted) && !empty($submitted)) {
+            $existing = \App\Core\Mailer::getTemplates();
+            foreach ($submitted as $key => $data) {
+                if (isset($existing[$key])) {
+                    $existing[$key]['subject'] = trim($data['subject'] ?? $existing[$key]['subject']);
+                    $existing[$key]['content'] = trim($data['content'] ?? $existing[$key]['content']);
+                }
+            }
+            \App\Core\Mailer::saveTemplates($existing);
+            $this->logAction("Updated system email notification template contents.");
+            Session::flash('success', 'Email templates saved successfully.');
+        } else {
+            Session::flash('error', 'No template data received.');
+        }
+
+        $this->redirect('/admin/email-settings');
+    }
+
     private function getSidebarFeatures(): array
     {
         return [
             'analytics', 'reports', 'notifications', 'products', 'categories', 'orders',
             'gift_cards', 'invoices', 'quotes', 'warehouses', 'shipments', 'tracking',
             'customers', 'suppliers', 'payments', 'deposits', 'support', 'chat',
-            'settings', 'users', 'roles', 'permissions', 'api_keys', 'gateways', 'audit_logs',
+            'settings', 'email_settings', 'users', 'roles', 'permissions', 'api_keys', 'gateways', 'audit_logs',
             'promotions', 'coupons'
         ];
     }
@@ -1393,9 +1598,18 @@ class AdminEnterpriseController extends Controller
                 [$userId, $amount, "Deposit approved via " . $gatewayName]
             );
 
-            // Fetch user info for logging
+            // Fetch user info for logging & email
             $user = User::find((int) $userId);
             $userEmail = $user ? $user['email'] : 'Unknown';
+
+            if ($user && !empty($user['email'])) {
+                \App\Core\Mailer::sendTriggerEmail('deposit_confirmation', $user['email'], [
+                    'name' => $user['name'],
+                    'amount' => formatPrice($amount),
+                    'gateway_name' => $gatewayName,
+                    'wallet_balance' => formatPrice(($user['wallet_balance'] ?? 0) + $amount)
+                ], $user['name']);
+            }
 
             $this->logAction("Approved deposit request #{$id} for {$userEmail} of $" . number_format($amount, 2));
             Session::flash('success', 'Deposit request approved. Funds successfully added to user wallet.');
@@ -1452,6 +1666,70 @@ class AdminEnterpriseController extends Controller
             'c' => $customer,
             'transactions' => $transactions
         ], 'admin');
+    }
+
+    public function emailCustomer(string $id): void
+    {
+
+        $user = User::find((int)$id);
+        if (!$user || $user['role'] !== 'customer') {
+            $this->redirect('/admin/customers', 'Customer not found.', 'error');
+        }
+
+        $subject = trim($this->input('subject', ''));
+        $message = trim($this->input('message', ''));
+
+        if (empty($subject) || empty($message)) {
+            $this->redirect('/admin/customers/manage/' . $id, 'Subject and message are required.', 'error');
+        }
+
+        // Wrap message in premium HTML styling
+        $appUrl = url('/');
+        $logoUrl = url('/assets/images/icon-192.png');
+        $year = date('Y');
+        
+        $htmlTemplate = "
+        <div style=\"font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #111111; color: #f3f4f6; border-radius: 12px; overflow: hidden; border: 1px solid #2a2a2a; box-shadow: 0 4px 20px rgba(0,0,0,0.5);\">
+            
+            <!-- Header -->
+            <div style=\"background-color: #1a1a1a; padding: 25px 30px; text-align: center; border-bottom: 1px solid #2a2a2a;\">
+                <img src=\"{$logoUrl}\" alt=\"ShopX Global Logo\" style=\"width: 60px; height: 60px; margin-bottom: 15px; border-radius: 12px; border: 1px solid #333;\">
+                <h1 style=\"color: #D4A017; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: 1px;\">SHOP<span style=\"color:#ffffff;\">X</span> GLOBAL</h1>
+            </div>
+
+            <!-- Body -->
+            <div style=\"padding: 35px 30px; background-color: #141414;\">
+                <h2 style=\"color: #ffffff; margin-top: 0; margin-bottom: 25px; font-size: 20px; font-weight: 600; border-bottom: 1px solid #222; padding-bottom: 15px;\">{$subject}</h2>
+                
+                <div style=\"font-size: 15px; line-height: 1.6; color: #d1d5db; white-space: pre-line;\">
+                    {$message}
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div style=\"background-color: #0a0a0a; padding: 25px 30px; text-align: center; border-top: 1px solid #2a2a2a;\">
+                <p style=\"margin: 0 0 10px 0; font-size: 12px; color: #6b7280;\">
+                    You received this email because you are a registered customer at ShopX Global.
+                </p>
+                <div style=\"margin-top: 15px;\">
+                    <a href=\"{$appUrl}\" style=\"display: inline-block; padding: 10px 20px; background-color: #D4A017; color: #000000; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: bold;\">Visit ShopX Global</a>
+                </div>
+                <p style=\"margin: 20px 0 0 0; font-size: 11px; color: #4b5563;\">
+                    &copy; {$year} ShopX Global. All rights reserved.
+                </p>
+            </div>
+            
+        </div>
+        ";
+
+        // Use the system Mailer to send the email directly
+        $result = \App\Core\Mailer::send($user['email'], $subject, $htmlTemplate, $user['name']);
+
+        if ($result['success']) {
+            $this->redirect('/admin/customers/manage/' . $id, 'Email sent successfully to ' . e($user['email']) . '.', 'success');
+        } else {
+            $this->redirect('/admin/customers/manage/' . $id, 'Failed to send email: ' . $result['error'], 'error');
+        }
     }
 
     public function updateCustomerProfile(string $id): void
@@ -1569,6 +1847,11 @@ class AdminEnterpriseController extends Controller
             'role' => 'customer',
             'wallet_balance' => 0.00
         ]);
+
+        \App\Core\Mailer::sendTriggerEmail('user_welcome', $email, [
+            'name' => $name,
+            'email' => $email
+        ], $name);
 
         $this->logAction("Created new customer account: {$email}");
         Session::flash('success', 'Customer account registered successfully.');
@@ -1726,6 +2009,14 @@ class AdminEnterpriseController extends Controller
     {
         $db = Database::getInstance();
 
+        Auth::recordAdminHeartbeat();
+        
+        // Fetch current online status for this admin
+        $adminId = Auth::id();
+        $statusRow = $db->query("SELECT is_online FROM admin_online_status WHERE admin_id = ?", [$adminId])->fetch();
+        $isOnline = $statusRow ? (int)$statusRow['is_online'] : 1;
+
+
         // Get all users and guests who have sent at least one chat message
         $conversations = $db->query(
             "SELECT MAX(cm.user_id) as user_id,
@@ -1798,7 +2089,27 @@ class AdminEnterpriseController extends Controller
             'selectedGuestId' => $selectedGuestId,
             'selectedUser' => $selectedUser,
             'selectedMessages' => $selectedMessages,
+            'isOnline' => $isOnline
         ], 'admin');
+    }
+
+    public function toggleChatStatus(): void
+    {
+        $adminId = Auth::id();
+        $isOnline = $this->input('is_online', 1);
+        
+        $db = Database::getInstance();
+        $now = time();
+        $db->query(
+            "INSERT INTO admin_online_status (admin_id, last_heartbeat, is_online) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE is_online = ?, last_heartbeat = ?",
+            [$adminId, $now, $isOnline, $isOnline, $now]
+        );
+        
+        PusherService::trigger('presence-chat-admins', 'status-change', [
+            'is_online' => $isOnline
+        ]);
+        
+        $this->json(['success' => true, 'is_online' => $isOnline]);
     }
 
     public function liveChatReply(string $identifier): void
@@ -1819,6 +2130,9 @@ class AdminEnterpriseController extends Controller
         }
 
         $db = Database::getInstance();
+
+        Auth::recordAdminHeartbeat();
+
         if ($isUserId) {
             $db->query(
                 "INSERT INTO chat_messages (user_id, sender, message, is_read, created_at) VALUES (?, 'admin', ?, 0, NOW())",
@@ -1828,11 +2142,18 @@ class AdminEnterpriseController extends Controller
             $this->logAction("Sent live chat reply to customer: " . ($user ? $user['email'] : "ID#{$identifier}"));
         } else {
             $db->query(
-                "INSERT INTO chat_messages (session_id, sender, message, is_read, created_at) VALUES (?, 'admin', ?, 0, NOW())",
+                "INSERT INTO chat_messages (session_id, user_id, sender, message, is_read, created_at) VALUES (?, NULL, 'admin', ?, 0, NOW())",
                 [$identifier, $message]
             );
             $this->logAction("Sent live chat reply to guest: " . substr($identifier, 0, 6));
         }
+        
+        $channel = $isUserId ? 'private-chat-user-' . $identifier : 'private-chat-guest-' . $identifier;
+        PusherService::trigger($channel, 'new-message', [
+            'message' => $message,
+            'sender' => 'admin',
+            'created_at' => date('Y-m-d H:i:s')
+        ]);
 
         if ($this->isAjax()) {
             $this->json(['success' => true]);
@@ -1842,4 +2163,36 @@ class AdminEnterpriseController extends Controller
         $redirectUrl = $isUserId ? '/admin/live-chat?user=' . $identifier : '/admin/live-chat?guest=' . $identifier;
         $this->redirect($redirectUrl);
     }
+
+    public function liveChatDelete(string $identifier): void
+    {
+        $this->validateCsrf();
+        $db = Database::getInstance();
+
+        $isUserId = is_numeric($identifier);
+        
+        if ($isUserId) {
+            $db->query("DELETE FROM chat_messages WHERE user_id = ?", [(int)$identifier]);
+            $this->logAction("Deleted live chat conversation with user ID#{$identifier}");
+        } else {
+            $db->query("DELETE FROM chat_messages WHERE session_id = ? AND user_id IS NULL", [$identifier]);
+            $this->logAction("Deleted live chat conversation with guest: " . substr($identifier, 0, 6));
+        }
+
+        if ($this->isAjax()) {
+            $this->json(['success' => true]);
+            return;
+        }
+
+        Session::flash('success', 'Conversation deleted successfully.');
+        $this->redirect('/admin/live-chat');
+    }
+
+    public function adminHeartbeat(): void
+    {
+        Auth::recordAdminHeartbeat();
+        $this->json(['success' => true]);
+    }
 }
+
+

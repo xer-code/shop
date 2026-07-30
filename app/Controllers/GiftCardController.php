@@ -81,6 +81,16 @@ class GiftCardController extends Controller
         ]);
         Auth::refreshWallet();
         
+        // Dispatch gift card purchased email
+        if (Auth::email()) {
+            \App\Core\Mailer::sendTriggerEmail('gift_card_purchased', Auth::email(), [
+                'name' => Auth::name(),
+                'gift_card_code' => $gc['code'],
+                'amount' => formatPrice($amount),
+                'name_on_card' => $gc['name'] ?: 'ShopX Gift Card'
+            ], Auth::name());
+        }
+        
         Session::flash('success', "Gift card purchased successfully! Code: {$gc['code']}");
         $this->redirect('/gift-cards');
     }
@@ -109,6 +119,16 @@ class GiftCardController extends Controller
             'amount' => $amount, 'description' => "Gift card redeemed: $code",
         ]);
         Auth::refreshWallet();
+        
+        // Dispatch gift card redeemed email
+        if (Auth::email()) {
+            \App\Core\Mailer::sendTriggerEmail('gift_card_redeemed', Auth::email(), [
+                'name' => Auth::name(),
+                'gift_card_code' => $code,
+                'amount' => formatPrice($amount),
+                'new_wallet_balance' => formatPrice(Auth::wallet())
+            ], Auth::name());
+        }
         
         Session::flash('success', "Gift card redeemed! " . formatPrice($amount) . " added to your wallet.");
         $this->redirect('/gift-cards');

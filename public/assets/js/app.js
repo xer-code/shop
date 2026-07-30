@@ -132,10 +132,61 @@ function updateCartBadge(count) {
 }
 
 /* =============================================
-   4. Live Chat Functionality
+   4. Live Chat Functionality (Pusher)
    ============================================= */
 let chatPollInterval = null;
-let loadedMessagesCount = 0;
+let loadedMessagesCount = -1; // -1 to force initial render
+let pusherClient = null;
+let pusherChannel = null;
+let adminPresenceChannel = null;
+
+function initPusherChat() {
+    if (!window.SHOPX_CHAT_CONFIG || !window.SHOPX_CHAT_CONFIG.pusherKey) {
+        console.warn('Pusher not configured. Falling back to HTTP polling.');
+        return false;
+    }
+    
+    if (pusherClient) return true; // already initialized
+
+    pusherClient = new Pusher(window.SHOPX_CHAT_CONFIG.pusherKey, {
+        cluster: window.SHOPX_CHAT_CONFIG.pusherCluster,
+        channelAuthorization: {
+            endpoint: window.SHOPX_CHAT_CONFIG.authEndpoint,
+            transport: 'ajax',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }
+    });
+
+    // Subscribe to messages
+    const channelName = window.SHOPX_CHAT_CONFIG.userId 
+        ? 'private-chat-user-' + window.SHOPX_CHAT_CONFIG.userId
+        : 'private-chat-guest-' + window.SHOPX_CHAT_CONFIG.sessionId;
+        
+    pusherChannel = pusherClient.subscribe(channelName);
+    
+    pusherChannel.bind('new-message', function(data) {
+        appendChatBubble(data.message, data.sender);
+        
+        // Update badge if chat panel is closed
+        const chatPanel = document.getElementById('chatPanel');
+        const badge = document.getElementById('chatWidgetBadge');
+        if (badge && chatPanel && !chatPanel.classList.contains('active')) {
+            let current = parseInt(badge.textContent) || 0;
+            badge.textContent = current + 1;
+            badge.style.display = 'flex';
+        }
+    });
+
+    // Subscribe to admin status
+    adminPresenceChannel = pusherClient.subscribe('presence-chat-admins');
+    adminPresenceChannel.bind('status-change', function(data) {
+        updateAdminStatusUI(data.is_online);
+    });
+    
+    return true;
+}
 
 function escapeChatHtml(str) {
     if (!str) return '';
@@ -146,21 +197,47 @@ function escapeChatHtml(str) {
               .replace(/'/g, '&#039;');
 }
 
+function updateAdminStatusUI(isOnline) {
+    const badge = document.getElementById('chatStatusBadge');
+    const subtitle = document.getElementById('chatStatusSubtitle');
+    if (!badge) return;
+
+    if (isOnline) {
+        badge.className = 'chat-status-badge online';
+        badge.innerHTML = '<span class="status-dot"></span><span class="status-text">Online</span>';
+        if (subtitle) subtitle.textContent = '🟢 Support is online — fast replies';
+    } else {
+        badge.className = 'chat-status-badge offline';
+        badge.innerHTML = '<span class="status-dot"></span><span class="status-text">Offline</span>';
+        if (subtitle) subtitle.textContent = '🔴 Support is offline — leave a message';
+    }
+}
+
 window.toggleChat = function() {
     const chatPanel = document.getElementById('chatPanel');
+    const badge = document.getElementById('chatWidgetBadge');
     if (chatPanel) {
         chatPanel.classList.toggle('active');
         if (chatPanel.classList.contains('active')) {
-            loadChatMessages();
+            if (badge) badge.style.display = 'none';
+            
+            // Try initializing Pusher
+            const isPusherActive = initPusherChat();
+            
+            // Initial load of past messages
+            if (loadedMessagesCount === -1) {
+                loadChatMessages(true);
+            }
+            
             const input = document.getElementById('chatInput');
             if (input) input.focus();
             
-            // Start polling for real-time updates every 4 seconds
-            if (!chatPollInterval) {
-                chatPollInterval = setInterval(loadChatMessages, 4000);
+            // If Pusher isn't configured, fall back to polling
+            if (!isPusherActive && !chatPollInterval) {
+                chatPollInterval = setInterval(() => loadChatMessages(false), 3000);
             }
         } else {
-            // Stop polling when closed
+            // Stop active panel polling if using fallback
             if (chatPollInterval) {
                 clearInterval(chatPollInterval);
                 chatPollInterval = null;
@@ -177,6 +254,9 @@ window.sendChatMessage = function() {
 
     input.value = '';
 
+    // Optimistic UI update: display user's message immediately
+    appendChatBubble(message, 'user');
+
     const formData = new FormData();
     formData.append('message', message);
     
@@ -186,7 +266,9 @@ window.sendChatMessage = function() {
         formData.append('_csrf_token', csrfToken.value);
     }
 
-    fetch('/chat/send', {
+    const sendUrl = (window.SHOPX_CHAT_CONFIG && window.SHOPX_CHAT_CONFIG.sendEndpoint) ? window.SHOPX_CHAT_CONFIG.sendEndpoint : '/chat/send';
+
+    fetch(sendUrl, {
         method: 'POST',
         body: formData,
         headers: {
@@ -195,11 +277,19 @@ window.sendChatMessage = function() {
     })
     .then(res => res.json())
     .then(data => {
-        // Sync conversation instantly
-        loadChatMessages();
+        if (data.admin_online !== undefined) {
+            updateAdminStatusUI(data.admin_online);
+        }
+        
+        if (!pusherClient) {
+            // Force refresh chat messages if using polling fallback
+            loadedMessagesCount = -1;
+            loadChatMessages(true);
+        }
     })
     .catch(err => console.error('Error sending message:', err));
 };
+
 
 function appendChatBubble(text, sender) {
     const container = document.getElementById('chatMessages');
@@ -216,42 +306,87 @@ function appendChatBubble(text, sender) {
     }
     
     container.appendChild(bubble);
-    
-    // Scroll to bottom
     container.scrollTop = container.scrollHeight;
 }
 
-function loadChatMessages() {
-    fetch('/chat/messages', {
+function loadChatMessages(forceScroll = false) {
+    const cacheBuster = new Date().getTime();
+    const messagesUrl = (window.SHOPX_CHAT_CONFIG && window.SHOPX_CHAT_CONFIG.messagesEndpoint) ? window.SHOPX_CHAT_CONFIG.messagesEndpoint : '/chat/messages';
+    
+    fetch(messagesUrl + '?_t=' + cacheBuster, {
         headers: {
             'X-Requested-With': 'XMLHttpRequest'
         }
     })
+
     .then(res => res.json())
     .then(data => {
+        if (data.admin_online !== undefined) {
+            updateAdminStatusUI(data.admin_online);
+        }
+
         const container = document.getElementById('chatMessages');
         if (!container || !data.messages) return;
 
-        // Skip rebuilding if message count has not changed (prevents flicker)
-        if (data.messages.length === loadedMessagesCount) {
+        // Skip rebuilding if message count has not changed unless forced
+        if (!forceScroll && data.messages.length === loadedMessagesCount) {
             return;
         }
 
-        // Keep default bot greeting
+        // Rebuild messages
         container.innerHTML = `
             <div class="chat-bubble bot">
                 👋 Welcome to ShopX Global! How can we help you today?
             </div>
         `;
 
+        let unreadFromAdmin = 0;
         data.messages.forEach(msg => {
             appendChatBubble(msg.message, msg.sender);
+            if (msg.sender === 'admin' && !msg.is_read) {
+                unreadFromAdmin++;
+            }
         });
 
         loadedMessagesCount = data.messages.length;
+
+        // Update badge if chat panel is closed
+        const chatPanel = document.getElementById('chatPanel');
+        const badge = document.getElementById('chatWidgetBadge');
+        if (badge && chatPanel && !chatPanel.classList.contains('active')) {
+            if (unreadFromAdmin > 0) {
+                badge.textContent = unreadFromAdmin;
+                badge.style.display = 'flex';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
     })
-    .catch(err => console.log('Guest user chat initialized. Log in to save history.'));
+    .catch(err => console.log('Chat initialization check.'));
 }
+
+function checkAdminStatusOnly() {
+    const cacheBuster = new Date().getTime();
+    fetch('/chat/admin-status?_t=' + cacheBuster, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+
+    .then(res => res.json())
+    .then(data => {
+        if (data.online !== undefined) {
+            updateAdminStatusUI(data.online);
+        }
+    })
+    .catch(() => {});
+}
+
+// Initial status check
+checkAdminStatusOnly();
+// Fallback periodic check only if Pusher isn't active
+setInterval(() => {
+    if (!pusherClient) checkAdminStatusOnly();
+}, 10000);
+
 
 /* =============================================
    5. PWA & Mobile App Install Logic

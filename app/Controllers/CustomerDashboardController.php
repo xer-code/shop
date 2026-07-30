@@ -233,6 +233,15 @@ class CustomerDashboardController extends Controller
         ]);
         Auth::refreshWallet();
 
+        if (Auth::email()) {
+            \App\Core\Mailer::sendTriggerEmail('gift_card_redeemed', Auth::email(), [
+                'name' => Auth::name(),
+                'gift_card_code' => $code,
+                'amount' => formatPrice($amount),
+                'new_wallet_balance' => formatPrice(Auth::wallet())
+            ], Auth::name());
+        }
+
         Session::flash('success', "Gift card redeemed! " . formatPrice($amount) . " added to your wallet.");
         $this->redirect('/dashboard?section=giftcards');
     }
